@@ -1,0 +1,22 @@
+{
+  "name": "DuniaNails",
+  "short_name": "DuniaNails",
+  "description": "Especialistas en uñas",
+  "start_url": "/dunia-nails/",
+  "scope": "/dunia-nails/",
+  "display": "standalone",
+  "background_color": "#d44c9e",
+  "theme_color": "#d44c9e",
+  "icons": [
+    {
+      "src": "/dunia-nails/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/dunia-nails/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
