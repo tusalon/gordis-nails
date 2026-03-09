@@ -1,10 +1,10 @@
-// utils/config-negocio.js - DuniaNails
+// utils/config-negocio.js - GordisNailsbySandra
 console.log('🏢 config-negocio.js cargado');
 
 // ============================================
-// 🔥 CONFIGURACIÓN DE DUNIANAILS
+// 🔥 CONFIGURACIÓN DE GORDISNAILSBYSANDRA
 // ============================================
-const NEGOCIO_ID_POR_DEFECTO = '0a418537-30d4-4939-863a-bf61c414185a'; // ID DE DUNIANAILS
+const NEGOCIO_ID_POR_DEFECTO = '935cc37b-ee0e-4187-9507-4409880a15c2'; // ID DE GORDISNAILSBYSANDRA
 
 window.NEGOCIO_ID_POR_DEFECTO = NEGOCIO_ID_POR_DEFECTO;
 
@@ -94,12 +94,12 @@ window.cargarConfiguracionNegocio = async function(forceRefresh = false) {
 
 window.getNombreNegocio = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.nombre || 'DuniaNails';
+    return config?.nombre || 'GordisNailsbySandra';
 };
 
 window.getTelefonoDuenno = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.telefono || '59315976';
+    return config?.telefono || '55002272';
 };
 
 window.getEmailNegocio = async function() {
@@ -109,32 +109,32 @@ window.getEmailNegocio = async function() {
 
 window.getInstagram = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.instagram || 'dunia_nails';
+    return config?.instagram || 'gordis_nails';
 };
 
 window.getFacebook = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.facebook || 'dunia.nails';
+    return config?.facebook || 'gordis.nails';
 };
 
 window.getHorarioAtencion = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.horario_atencion || 'Lun-Vie 10:00-20:00, Sáb 10:00-18:00';
+    return config?.horario_atencion || 'Mar-Sáb 9:00-21:00, Dom cerrado';
 };
 
 window.getMensajeBienvenida = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.mensaje_bienvenida || '👋 Bienvenida a DuniaNails - Especialistas en uñas';
+    return config?.mensaje_bienvenida || '👋 Bienvenida a GordisNailsbySandra - Tu espacio de belleza';
 };
 
 window.getMensajeConfirmacion = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.mensaje_confirmacion || '✅ Tu turno en DuniaNails ha sido reservado';
+    return config?.mensaje_confirmacion || '✅ Reserva confirmada en GordisNailsbySandra';
 };
 
 window.getNtfyTopic = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.ntfy_topic || 'dunia-nails-notifications';
+    return config?.ntfy_topic || 'gordis-nails-notifications';
 };
 
 window.negocioConfigurado = async function() {
@@ -147,5 +147,5 @@ setTimeout(async () => {
     await window.cargarConfiguracionNegocio();
 }, 500);
 
-console.log('✅ config-negocio.js listo para DuniaNails');
+console.log('✅ config-negocio.js listo para GordisNailsbySandra');
 console.log('🏷️  ID configurado:', NEGOCIO_ID_POR_DEFECTO);

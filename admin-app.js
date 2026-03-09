@@ -1,7 +1,7 @@
 // admin-app.js - Panel de administración (VERSIÓN CORREGIDA CON WHATSAPP GLOBAL)
 // CLIENTE: Negocio de Prueba
 
-console.log('🚀 ADMIN-APP.JS - Negocio de Prueba');
+console.log('🚀 ADMIN-APP.JS - GordisNailsbySandra');
 
 window.addEventListener('error', function(e) {
     console.error('❌ Error detectado, posible versión antigua:', e.message);

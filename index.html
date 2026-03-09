@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DuniaNails - Reserva de Turnos</title>
-    <meta name="description" content="Reservá tu turno fácil y rápido en DuniaNails">
+    <title>GordisNailsbySandra - Reserva de Turnos</title>
+    <meta name="description" content="Reservá tu turno en GordisNailsbySandra - Uñas y belleza">
     
     <!-- PWA Meta Tags con rutas RELATIVAS -->
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#d44c9e">
+    <meta name="theme-color" content="#9333ea">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="DuniaNails">
+    <meta name="apple-mobile-web-app-title" content="GordisNails">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192x192.png">
     
@@ -20,7 +20,7 @@
 <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/dunia-nails/sw.js')
+            navigator.serviceWorker.register('/gordis-nails/sw.js')
                 .then(registration => {
                     console.log('✅ Service Worker registrado:', registration.scope);
                 })
@@ -85,7 +85,6 @@
 <script>
 // FORZAR PROMPT DE INSTALACIÓN - ULTIMO RECURSO
 window.addEventListener('load', () => {
-    // Verificar si ya está instalada
     if (window.matchMedia('(display-mode: standalone)').matches) {
         console.log('📱 App ya instalada');
         return;
@@ -98,14 +97,13 @@ window.addEventListener('load', () => {
         deferredPrompt = e;
         console.log('✅ beforeinstallprompt listo');
         
-        // Crear botón flotante
         const btn = document.createElement('button');
         btn.innerText = '📲 INSTALAR APP';
         btn.style.position = 'fixed';
         btn.style.bottom = '20px';
         btn.style.right = '20px';
         btn.style.zIndex = '9999';
-        btn.style.background = '#d44c9e';
+        btn.style.background = '#9333ea';
         btn.style.color = 'white';
         btn.style.padding = '15px 30px';
         btn.style.borderRadius = '50px';
@@ -125,7 +123,6 @@ window.addEventListener('load', () => {
         document.body.appendChild(btn);
     });
 
-    // Timeout: si no hay evento en 5 segundos, mostrar instrucciones
     setTimeout(() => {
         if (!deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
             const msg = document.createElement('div');
