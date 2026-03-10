@@ -1,4 +1,5 @@
 // utils/whatsapp-helper.js - VERSIÓN DINÁMICA (CORREGIDA)
+// CON FUNCIÓN PARA RESERVAS PENDIENTES DE PAGO
 
 console.log('📱 whatsapp-helper.js - VERSIÓN DINÁMICA');
 
@@ -166,6 +167,68 @@ window.notificarNuevaReserva = async function(booking) {
 };
 
 // ============================================
+// 🆕 NOTIFICACIÓN DE RESERVA PENDIENTE (PARA GORDIS)
+// ============================================
+window.notificarReservaPendiente = async function(booking) {
+    try {
+        if (!booking) {
+            console.error('❌ No hay datos de reserva');
+            return false;
+        }
+
+        console.log('📤 Procesando notificación de RESERVA PENDIENTE');
+
+        const config = await getConfigNegocio();
+        
+        const fechaConDia = window.formatFechaCompleta ? 
+            window.formatFechaCompleta(booking.fecha) : 
+            booking.fecha;
+        
+        const horaFormateada = window.formatTo12Hour ? 
+            window.formatTo12Hour(booking.hora_inicio) : 
+            booking.hora_inicio;
+            
+        const profesional = booking.profesional_nombre || booking.trabajador_nombre || 'No asignada';
+        
+        // WhatsApp a la dueña con formato especial
+        const mensajeWhatsApp = 
+`🆕 *RESERVA PENDIENTE DE PAGO - ${config.nombre}*
+
+👤 *Cliente:* ${booking.cliente_nombre}
+📱 *WhatsApp:* ${booking.cliente_whatsapp}
+💅 *Servicio:* ${booking.servicio} (${booking.duracion} min)
+📅 *Fecha:* ${fechaConDia}
+⏰ *Hora:* ${horaFormateada}
+👩‍🎨 *Profesional:* ${profesional}
+💰 *Estado:* Pendiente de pago
+
+✅ Ingresá al panel para confirmar el pago:
+https://tusalon.github.io/gordis-nails/admin-login.html`;
+
+        window.enviarWhatsApp(config.telefono, mensajeWhatsApp);
+        
+        // Push notification con prioridad alta
+        const mensajePush = 
+`🆕 RESERVA PENDIENTE - ${config.nombre}
+👤 Cliente: ${booking.cliente_nombre}
+💰 Estado: Pendiente de pago`;
+
+        await window.enviarNotificacionPush(
+            `💰 ${config.nombre} - Pago pendiente`,
+            mensajePush,
+            'moneybag',
+            'high'  // Prioridad alta
+        );
+        
+        console.log('✅ Notificación de reserva pendiente enviada');
+        return true;
+    } catch (error) {
+        console.error('Error en notificarReservaPendiente:', error);
+        return false;
+    }
+};
+
+// ============================================
 // NOTIFICACIÓN DE CANCELACIÓN
 // ============================================
 window.notificarCancelacion = async function(booking) {
@@ -250,3 +313,4 @@ ${canceladoPor === 'cliente' ? '🔔 Cancelado por cliente' : '🔔 Cancelado po
 };
 
 console.log('✅ whatsapp-helper.js - VERSIÓN DINÁMICA CARGADA');
+console.log('✅ Función notificarReservaPendiente agregada');

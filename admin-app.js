@@ -1,5 +1,5 @@
 // admin-app.js - Panel de administración (VERSIÓN CORREGIDA CON WHATSAPP GLOBAL)
-// CLIENTE: Negocio de Prueba
+// CLIENTE: GordisNailsbySandra
 
 console.log('🚀 ADMIN-APP.JS - GordisNailsbySandra');
 
@@ -793,6 +793,41 @@ function AdminApp() {
     }, [userRole, userNivel, profesional]);
 
     // ============================================
+    // FUNCIÓN PARA CONFIRMAR PAGO (SOLO PARA GORDIS)
+    // ============================================
+    const confirmarPago = async (id, bookingData) => {
+        if (!confirm(`¿Confirmar que se recibió el pago de ${bookingData.cliente_nombre}? El turno pasará a "Reservado".`)) return;
+        
+        try {
+            console.log(`💰 Confirmando pago para reserva ${id}`);
+            
+            const response = await fetch(
+                `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${getNegocioId()}&id=eq.${id}`,
+                {
+                    method: 'PATCH',
+                    headers: {
+                        'apikey': window.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ estado: 'Reservado' })
+                }
+            );
+            
+            if (!response.ok) {
+                throw new Error('Error al confirmar pago');
+            }
+            
+            alert('✅ Pago confirmado. Turno reservado.');
+            fetchBookings(); // Recargar reservas
+            
+        } catch (error) {
+            console.error('Error confirmando pago:', error);
+            alert('❌ Error al confirmar el pago');
+        }
+    };
+
+    // ============================================
     // HANDLE CANCEL CORREGIDO - USA notificarCancelacion
     // ============================================
     const handleCancel = async (id, bookingData) => {
@@ -850,6 +885,8 @@ function AdminApp() {
         let resultado;
         if (statusFilter === 'activas') {
             resultado = filtradas.filter(b => b.estado === 'Reservado');
+        } else if (statusFilter === 'pendientes') {
+            resultado = filtradas.filter(b => b.estado === 'Pendiente');
         } else if (statusFilter === 'completadas') {
             resultado = filtradas.filter(b => b.estado === 'Completado');
         } else if (statusFilter === 'canceladas') {
@@ -864,6 +901,7 @@ function AdminApp() {
     };
 
     const activasCount = bookings.filter(b => b.estado === 'Reservado').length;
+    const pendientesCount = bookings.filter(b => b.estado === 'Pendiente').length;
     const completadasCount = bookings.filter(b => b.estado === 'Completado').length;
     const canceladasCount = bookings.filter(b => b.estado === 'Cancelado').length;
     const filteredBookings = getFilteredBookings();
@@ -1252,6 +1290,7 @@ function AdminApp() {
 
                             <div className="flex flex-wrap gap-2">
                                 <button onClick={() => setStatusFilter('activas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'activas' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Activas ({activasCount})</button>
+                                <button onClick={() => setStatusFilter('pendientes')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'pendientes' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Pendientes ({pendientesCount})</button>
                                 <button onClick={() => setStatusFilter('completadas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'completadas' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Completadas ({completadasCount})</button>
                                 <button onClick={() => setStatusFilter('canceladas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'canceladas' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Canceladas ({canceladasCount})</button>
                                 <button onClick={() => setStatusFilter('todas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'todas' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Todas ({bookings.length})</button>
@@ -1273,6 +1312,7 @@ function AdminApp() {
                                     filteredBookings.map(b => (
                                         <div key={b.id} className={`bg-white p-4 rounded-xl shadow-sm border-l-4 ${
                                             b.estado === 'Reservado' ? 'border-l-pink-500' :
+                                            b.estado === 'Pendiente' ? 'border-l-yellow-500' :
                                             b.estado === 'Completado' ? 'border-l-green-500' :
                                             'border-l-red-500'
                                         }`}>
@@ -1289,15 +1329,26 @@ function AdminApp() {
                                             <div className="flex justify-between items-center mt-3 pt-2 border-t">
                                                 <span className={`px-2 py-1 rounded-full text-xs font-semibold
                                                     ${b.estado === 'Reservado' ? 'bg-pink-100 text-pink-700' : 
+                                                      b.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-700' :
                                                       b.estado === 'Completado' ? 'bg-green-100 text-green-700' : 
                                                       'bg-red-100 text-red-700'}`}>
                                                     {b.estado}
                                                 </span>
-                                                {b.estado === 'Reservado' && (
-                                                    <button onClick={() => handleCancel(b.id, b)} className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 flex items-center gap-1">
-                                                        <span>❌</span> Cancelar
-                                                    </button>
-                                                )}
+                                                <div className="flex gap-2">
+                                                    {b.estado === 'Pendiente' && (
+                                                        <button 
+                                                            onClick={() => confirmarPago(b.id, b)} 
+                                                            className="px-3 py-1 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600 flex items-center gap-1"
+                                                        >
+                                                            <span>✅</span> Confirmar pago
+                                                        </button>
+                                                    )}
+                                                    {b.estado === 'Reservado' && (
+                                                        <button onClick={() => handleCancel(b.id, b)} className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 flex items-center gap-1">
+                                                            <span>❌</span> Cancelar
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     ))

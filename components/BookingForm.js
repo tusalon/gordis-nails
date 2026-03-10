@@ -1,4 +1,5 @@
 // components/BookingForm.js - VERSIÓN IPHONE (con estilos originales)
+// MODIFICADO PARA GORDISNAILS - CON MENSAJE DE PAGO
 
 function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cliente }) {
     const [submitting, setSubmitting] = React.useState(false);
@@ -113,14 +114,14 @@ function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cli
         const linea5 = `Client: ${bookingData.cliente_nombre}`;
         const linea6 = `WhatsApp: +53 ${bookingData.cliente_whatsapp}`;
         const linea7 = ``;
-        const linea8 = `Negocio de Prueba`;
+        const linea8 = `GordisNailsbySandra`;
         
         // Aplicar partición de líneas largas
         const descripcion = `${partirLinea(linea1)}\n${partirLinea(linea2)}\n${partirLinea(linea3)}\n${partirLinea(linea4)}\n${partirLinea(linea5)}\n${partirLinea(linea6)}\n${linea7}\n${linea8}`;
         
         return `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//Studioisma//Setmore//EN
+PRODID:-//GordisNails//Setmore//EN
 METHOD:REQUEST
 BEGIN:VTIMEZONE
 TZID:America/Havana
@@ -150,10 +151,10 @@ DTSTART:${dtstart}
 DTEND:${dtend}
 SUMMARY:${bookingData.servicio} with ${bookingData.profesional_nombre}
 TRANSP:OPAQUE
-LOCATION:Negocio de Prueba
+LOCATION:GordisNailsbySandra
 DESCRIPTION:${descripcion}
-ORGANIZER;CN="Negocio de Prueba":mailto:studioisma@gmail.com
-ATTENDEE;ROLE=CHAIR;CUTYPE=INDIVIDUAL;RSVP=FALSE;CN="Negocio de Prueba":MAILTO:studioisma@gmail.com
+ORGANIZER;CN="GordisNailsbySandra":mailto:gordis@email.com
+ATTENDEE;ROLE=CHAIR;CUTYPE=INDIVIDUAL;RSVP=FALSE;CN="GordisNailsbySandra":MAILTO:gordis@email.com
 ATTENDEE;ROLE=REQ-PARTICIPANT;CUTYPE=INDIVIDUAL;RSVP=FALSE;CN="${bookingData.cliente_nombre}":MAILTO:cliente@email.com
 STATUS:CONFIRMED
 CLASS:PUBLIC
@@ -214,6 +215,7 @@ END:VCALENDAR`;
 
             const endTime = calculateEndTime(time, service.duracion);
 
+            // 🔥 CAMBIO 1: Estado "Pendiente" en lugar de "Reservado"
             const bookingData = {
                 cliente_nombre: cliente.nombre,
                 cliente_whatsapp: cliente.whatsapp,
@@ -224,14 +226,40 @@ END:VCALENDAR`;
                 fecha: date,
                 hora_inicio: time,
                 hora_fin: endTime,
-                estado: "Reservado"
+                estado: "Pendiente"  // 🔥 CAMBIADO
             };
 
             const result = await createBooking(bookingData);
             
             if (result.success && result.data) {
-                console.log('✅ Reserva creada');
+                console.log('✅ Reserva creada en estado PENDIENTE');
                 
+                // 🔥 CAMBIO 2: Mostrar mensaje de pago
+                const mensajePago = 
+`💅 *GORDISNAILSBYSANDRA*
+
+✅ *SOLICITUD DE TURNO REGISTRADA*
+
+Tu turno quedó *PENDIENTE DE PAGO*.
+
+Para confirmarlo, enviá el *anticipo de $500* por:
+
+🏦 *Transferencia:* 
+   CBU: 1234567890123456789012
+   Alias: GORDIS.ANTICIPO
+
+📲 *Mercado Pago:* 
+   https://mpago.li/......
+
+📱 *WhatsApp:* 
+   Enviá el comprobante al +53 55002272
+
+⏳ *Importante:* 
+El turno se cancelará automáticamente si no se confirma el pago dentro de las 2 horas.`;
+
+                alert(mensajePago);
+                
+                // Generar y descargar archivo ICS
                 const icsContent = generarArchivoCalendario(result.data);
                 
                 const fechaSegura = result.data.fecha.replace(/-/g, '');
@@ -245,8 +273,9 @@ END:VCALENDAR`;
                 
                 descargarArchivoICS(icsContent, nombreArchivo);
                 
-                if (window.notificarNuevaReserva) {
-                    window.notificarNuevaReserva(result.data);
+                // 🔥 CAMBIO 3: Notificar como pendiente (usaremos función nueva)
+                if (window.notificarReservaPendiente) {
+                    await window.notificarReservaPendiente(result.data);
                 }
                 
                 onSubmit(result.data);
