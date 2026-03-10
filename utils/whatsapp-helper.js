@@ -1,18 +1,18 @@
-// utils/whatsapp-helper.js - VERSIÓN GLOBAL COMPLETA con WhatsApp universal + NTFY dinámico
-// CLIENTE: Negocio de Prueba
+// utils/whatsapp-helper.js - GORDISNAILSBYSANDRA
 
-console.log('📱 whatsapp-helper.js - VERSIÓN GLOBAL CON NTFY');
+console.log('📱 whatsapp-helper.js - GORDISNAILSBYSANDRA');
 
 // ============================================
 // CONFIGURACIÓN CENTRALIZADA
 // ============================================
 const CONFIG = {
-    NTFY_TOPIC_DEFAULT: 'studioisma-notifications',
-    TELEFONO_DUENNA: '55002272'
+    NTFY_TOPIC_DEFAULT: 'gordis-nails-notifications',
+    TELEFONO_DUENNA: '55002272',
+    NOMBRE_NEGOCIO: 'GordisNailsbySandra'
 };
 
 // ============================================
-// FUNCIÓN PARA OBTENER TOPIC NTFY (SIEMPRE DINÁMICO)
+// FUNCIÓN PARA OBTENER TOPIC NTFY
 // ============================================
 window.getNtfyTopicConfig = async function() {
     try {
@@ -32,7 +32,7 @@ window.getNtfyTopicConfig = async function() {
 };
 
 // ============================================
-// DETECTOR DE iOS MEJORADO
+// DETECTOR DE iOS
 // ============================================
 window.esIOS = function() {
     const userAgent = navigator.userAgent || navigator.vendor || window.opera;
@@ -41,7 +41,7 @@ window.esIOS = function() {
 };
 
 // ============================================
-// FUNCIÓN UNIVERSAL WHATSAPP - FUNCIONA EN TODOS LADOS
+// FUNCIÓN UNIVERSAL WHATSAPP
 // ============================================
 window.enviarWhatsApp = function(telefono, mensaje) {
     try {
@@ -79,7 +79,7 @@ window.enviarWhatsApp = function(telefono, mensaje) {
 };
 
 // ============================================
-// FUNCIÓN UNIVERSAL NTFY - ÚNICA PARA TODAS LAS NOTIFICACIONES PUSH
+// FUNCIÓN UNIVERSAL NTFY
 // ============================================
 window.enviarNotificacionPush = async function(titulo, mensaje, etiquetas = 'bell', prioridad = 'default') {
     try {
@@ -111,7 +111,7 @@ window.enviarNotificacionPush = async function(titulo, mensaje, etiquetas = 'bel
 };
 
 // ============================================
-// NOTIFICACIÓN DE NUEVA RESERVA (WhatsApp + ntfy)
+// NOTIFICACIÓN DE NUEVA RESERVA
 // ============================================
 window.notificarNuevaReserva = async function(booking) {
     try {
@@ -134,7 +134,7 @@ window.notificarNuevaReserva = async function(booking) {
         
         // WhatsApp a la dueña
         const mensajeWhatsApp = 
-`🆕 *NUEVA RESERVA - Negocio de Prueba*
+`🎉 *NUEVA RESERVA - ${CONFIG.NOMBRE_NEGOCIO}*
 
 👤 *Cliente:* ${booking.cliente_nombre}
 📱 *WhatsApp:* ${booking.cliente_whatsapp}
@@ -143,13 +143,13 @@ window.notificarNuevaReserva = async function(booking) {
 ⏰ *Hora:* ${horaFormateada}
 👩‍🎨 *Profesional:* ${profesional}
 
-✅ Reserva confirmada automáticamente. 💖`;
+✅ Reserva confirmada automáticamente.`;
 
         window.enviarWhatsApp(CONFIG.TELEFONO_DUENNA, mensajeWhatsApp);
         
         // Push notification
         const mensajePush = 
-`🆕 NUEVA RESERVA
+`🎉 NUEVA RESERVA - ${CONFIG.NOMBRE_NEGOCIO}
 👤 Cliente: ${booking.cliente_nombre}
 📱 WhatsApp: ${booking.cliente_whatsapp}
 💅 Servicio: ${booking.servicio} (${booking.duracion} min)
@@ -158,7 +158,7 @@ window.notificarNuevaReserva = async function(booking) {
 👩‍🎨 Profesional: ${profesional}`;
 
         await window.enviarNotificacionPush(
-            'Nueva reserva - Negocio de Prueba',
+            `🎉 ${CONFIG.NOMBRE_NEGOCIO} - Nueva reserva`,
             mensajePush,
             'tada',
             'default'
@@ -173,7 +173,7 @@ window.notificarNuevaReserva = async function(booking) {
 };
 
 // ============================================
-// NOTIFICACIÓN DE CANCELACIÓN (WhatsApp cliente + WhatsApp dueña + ntfy)
+// NOTIFICACIÓN DE CANCELACIÓN
 // ============================================
 window.notificarCancelacion = async function(booking) {
     try {
@@ -198,7 +198,7 @@ window.notificarCancelacion = async function(booking) {
         
         // WhatsApp al DUEÑO (siempre)
         const mensajeDuenno = 
-`❌ *CANCELACIÓN - Negocio de Prueba*
+`❌ *CANCELACIÓN - ${CONFIG.NOMBRE_NEGOCIO}*
 
 👤 *Cliente:* ${booking.cliente_nombre}
 📱 *WhatsApp:* ${booking.cliente_whatsapp}
@@ -207,14 +207,14 @@ window.notificarCancelacion = async function(booking) {
 ⏰ *Hora:* ${horaFormateada}
 👩‍🎨 *Profesional:* ${profesional}
 
-${canceladoPor === 'cliente' ? 'El cliente canceló su turno desde la app.' : 'El administrador canceló la reserva.'}`;
+${canceladoPor === 'cliente' ? 'El cliente canceló su turno.' : 'El administrador canceló la reserva.'}`;
 
         window.enviarWhatsApp(CONFIG.TELEFONO_DUENNA, mensajeDuenno);
 
         // WhatsApp al CLIENTE (solo si canceló el admin)
         if (canceladoPor === 'admin') {
             const mensajeCliente = 
-`❌ *CANCELACIÓN DE TURNO*
+`❌ *CANCELACIÓN DE TURNO - ${CONFIG.NOMBRE_NEGOCIO}*
 
 Hola *${booking.cliente_nombre}*, lamentamos informarte que tu turno ha sido cancelado.
 
@@ -225,10 +225,7 @@ Hola *${booking.cliente_nombre}*, lamentamos informarte que tu turno ha sido can
 
 🔔 *Motivo:* Cancelación por administración
 
-📱 *¿Querés reprogramar?*
-Podés hacerlo desde la app
-
-Disculpá las molestias.`;
+📱 *¿Querés reprogramar?* Podés hacerlo desde la app`;
 
             const telefonoCliente = booking.cliente_whatsapp.replace(/\D/g, '');
             window.enviarWhatsApp(telefonoCliente, mensajeCliente);
@@ -236,7 +233,7 @@ Disculpá las molestias.`;
 
         // Push notification
         const mensajePush = 
-`❌ CANCELACION
+`❌ CANCELACION - ${CONFIG.NOMBRE_NEGOCIO}
 👤 Cliente: ${booking.cliente_nombre}
 📱 WhatsApp: ${booking.cliente_whatsapp}
 💅 Servicio: ${booking.servicio}
@@ -244,7 +241,7 @@ Disculpá las molestias.`;
 ${canceladoPor === 'cliente' ? '🔔 Cancelado por cliente' : '🔔 Cancelado por admin'}`;
 
         await window.enviarNotificacionPush(
-            'Cancelación - Negocio de Prueba',
+            `❌ ${CONFIG.NOMBRE_NEGOCIO} - Cancelación`,
             mensajePush,
             'x',
             'default'
@@ -258,4 +255,4 @@ ${canceladoPor === 'cliente' ? '🔔 Cancelado por cliente' : '🔔 Cancelado po
     }
 };
 
-console.log('✅ whatsapp-helper.js VERSIÓN COMPLETA CON NTFY');
+console.log('✅ whatsapp-helper.js - Versión GORDISNAILSBYSANDRA');
