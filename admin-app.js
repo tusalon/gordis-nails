@@ -793,39 +793,54 @@ function AdminApp() {
     }, [userRole, userNivel, profesional]);
 
     // ============================================
-    // FUNCIÓN PARA CONFIRMAR PAGO (SOLO PARA GORDIS)
-    // ============================================
-    const confirmarPago = async (id, bookingData) => {
-        if (!confirm(`¿Confirmar que se recibió el pago de ${bookingData.cliente_nombre}? El turno pasará a "Reservado".`)) return;
+// FUNCIÓN PARA CONFIRMAR PAGO (CON WHATSAPP AL CLIENTE)
+// ============================================
+const confirmarPago = async (id, bookingData) => {
+    if (!confirm(`¿Confirmar que se recibió el pago de ${bookingData.cliente_nombre}? El turno pasará a "Reservado".`)) return;
+    
+    try {
+        console.log(`💰 Confirmando pago para reserva ${id}`);
         
-        try {
-            console.log(`💰 Confirmando pago para reserva ${id}`);
-            
-            const response = await fetch(
-                `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${getNegocioId()}&id=eq.${id}`,
-                {
-                    method: 'PATCH',
-                    headers: {
-                        'apikey': window.SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ estado: 'Reservado' })
-                }
-            );
-            
-            if (!response.ok) {
-                throw new Error('Error al confirmar pago');
+        // Cambiar estado a "Reservado"
+        const response = await fetch(
+            `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${getNegocioId()}&id=eq.${id}`,
+            {
+                method: 'PATCH',
+                headers: {
+                    'apikey': window.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ estado: 'Reservado' })
             }
-            
-            alert('✅ Pago confirmado. Turno reservado.');
-            fetchBookings(); // Recargar reservas
-            
-        } catch (error) {
-            console.error('Error confirmando pago:', error);
-            alert('❌ Error al confirmar el pago');
+        );
+        
+        if (!response.ok) {
+            throw new Error('Error al confirmar pago');
         }
-    };
+        
+        // 🔥 ENVIAR WHATSAPP DE CONFIRMACIÓN AL CLIENTE
+        console.log('📤 Enviando confirmación de turno al cliente...');
+        
+        // Crear un objeto con los datos actualizados
+        const reservaConfirmada = {
+            ...bookingData,
+            estado: 'Reservado'
+        };
+        
+        // Usar la función que ya existe para notificar nueva reserva
+        if (window.notificarNuevaReserva) {
+            await window.notificarNuevaReserva(reservaConfirmada);
+        }
+        
+        alert('✅ Pago confirmado. Turno reservado y cliente notificado.');
+        fetchBookings(); // Recargar reservas
+        
+    } catch (error) {
+        console.error('Error confirmando pago:', error);
+        alert('❌ Error al confirmar el pago');
+    }
+};
 
     // ============================================
     // HANDLE CANCEL CORREGIDO - USA notificarCancelacion

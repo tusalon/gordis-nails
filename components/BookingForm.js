@@ -1,5 +1,5 @@
 // components/BookingForm.js - VERSIÓN IPHONE (con estilos originales)
-// MODIFICADO PARA GORDISNAILS - CON MENSAJE DE PAGO
+// MODIFICADO PARA GORDISNAILS - ENVÍO DE PAGO Y CONFIRMACIÓN POR WHATSAPP
 
 function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cliente }) {
     const [submitting, setSubmitting] = React.useState(false);
@@ -195,6 +195,54 @@ END:VCALENDAR`;
     }
 
     // ============================================
+    // FUNCIÓN PARA ENVIAR DATOS DE PAGO POR WHATSAPP
+    // ============================================
+    function enviarDatosPagoWhatsApp(clienteWhatsapp, datosReserva) {
+        try {
+            const fechaConDia = window.formatFechaCompleta ? 
+                window.formatFechaCompleta(datosReserva.fecha) : 
+                datosReserva.fecha;
+            
+            const horaFormateada = window.formatTo12Hour ? 
+                window.formatTo12Hour(datosReserva.hora_inicio) : 
+                datosReserva.hora_inicio;
+            
+            const mensajePago = 
+`💅 *GORDISNAILSBYSANDRA*
+
+✅ *SOLICITUD DE TURNO REGISTRADA*
+
+📅 *Fecha:* ${fechaConDia}
+⏰ *Hora:* ${horaFormateada}
+💈 *Servicio:* ${datosReserva.servicio}
+👩‍🎨 *Profesional:* ${datosReserva.profesional_nombre}
+
+💰 *Para confirmar tu turno*, enviá el *anticipo de $500* por:
+
+🏦 *Transferencia bancaria:* 
+   CBU: 1234567890123456789012
+   Alias: GORDIS.ANTICIPO
+
+📲 *Mercado Pago:* 
+   https://mpago.li/......
+
+📱 *WhatsApp para comprobantes:* 
+   +53 55002272
+
+⏳ *Importante:* 
+El turno se cancelará automáticamente si no se confirma el pago dentro de las 2 horas.
+
+¡Gracias por elegirnos! 💖`;
+
+            window.enviarWhatsApp(clienteWhatsapp, mensajePago);
+            return true;
+        } catch (error) {
+            console.error('Error enviando datos de pago:', error);
+            return false;
+        }
+    }
+
+    // ============================================
     // HANDLE SUBMIT (CON ESTILOS ORIGINALES)
     // ============================================
     const handleSubmit = async (e) => {
@@ -215,7 +263,7 @@ END:VCALENDAR`;
 
             const endTime = calculateEndTime(time, service.duracion);
 
-            // 🔥 CAMBIO 1: Estado "Pendiente" en lugar de "Reservado"
+            // 🔥 Estado "Pendiente"
             const bookingData = {
                 cliente_nombre: cliente.nombre,
                 cliente_whatsapp: cliente.whatsapp,
@@ -226,7 +274,7 @@ END:VCALENDAR`;
                 fecha: date,
                 hora_inicio: time,
                 hora_fin: endTime,
-                estado: "Pendiente"  // 🔥 CAMBIADO
+                estado: "Pendiente"
             };
 
             const result = await createBooking(bookingData);
@@ -234,30 +282,8 @@ END:VCALENDAR`;
             if (result.success && result.data) {
                 console.log('✅ Reserva creada en estado PENDIENTE');
                 
-                // 🔥 CAMBIO 2: Mostrar mensaje de pago
-                const mensajePago = 
-`💅 *GORDISNAILSBYSANDRA*
-
-✅ *SOLICITUD DE TURNO REGISTRADA*
-
-Tu turno quedó *PENDIENTE DE PAGO*.
-
-Para confirmarlo, enviá el *anticipo de $500* por:
-
-🏦 *Transferencia:* 
-   CBU: 1234567890123456789012
-   Alias: GORDIS.ANTICIPO
-
-📲 *Mercado Pago:* 
-   https://mpago.li/......
-
-📱 *WhatsApp:* 
-   Enviá el comprobante al +53 55002272
-
-⏳ *Importante:* 
-El turno se cancelará automáticamente si no se confirma el pago dentro de las 2 horas.`;
-
-                alert(mensajePago);
+                // 🔥 1. ENVIAR DATOS DE PAGO POR WHATSAPP AL CLIENTE
+                enviarDatosPagoWhatsApp(cliente.whatsapp, result.data);
                 
                 // Generar y descargar archivo ICS
                 const icsContent = generarArchivoCalendario(result.data);
@@ -273,7 +299,7 @@ El turno se cancelará automáticamente si no se confirma el pago dentro de las 
                 
                 descargarArchivoICS(icsContent, nombreArchivo);
                 
-                // 🔥 CAMBIO 3: Notificar como pendiente (usaremos función nueva)
+                // 🔥 2. NOTIFICAR A LA DUEÑA (reserva pendiente)
                 if (window.notificarReservaPendiente) {
                     await window.notificarReservaPendiente(result.data);
                 }
