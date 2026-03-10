@@ -1,6 +1,6 @@
 function Confirmation({ booking, onReset }) {
     React.useEffect(() => {
-        const phone = "5354646800"; // Número del dueño (Cuba)
+        const phone = "5355002272"; // Número del dueño (Cuba)
         const text = `📅 NUEVO TURNO - UÑAS MÁGICAS\n👤 Cliente: ${booking.cliente_nombre}\n📱 WhatsApp: ${booking.cliente_whatsapp}\n💅 Servicio: ${booking.servicio} (${booking.duracion} min)\n📆 Fecha: ${booking.fecha}\n⏰ Hora: ${booking.hora_inicio}`;
         const encodedText = encodeURIComponent(text);
         
@@ -65,7 +65,7 @@ function Confirmation({ booking, onReset }) {
             <div className="flex flex-col gap-3 w-full max-w-xs">
                 <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg flex items-center justify-center gap-2">
                    <div className="icon-smartphone"></div>
-                   Contacto: +53 54646800
+                   Contacto: +53 55002272
                 </div>
                 
                 <button 

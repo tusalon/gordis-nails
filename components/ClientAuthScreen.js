@@ -227,7 +227,7 @@ const handleSubmit = async (e) => {
     const colorPrimario = config?.color_primario || '#ec4899';
     const colorSecundario = config?.color_secundario || '#f9a8d4';
     const nombreNegocio = config?.nombre || 'Mi Salón';
-    const telefonoDuenno = config?.telefono || '54646800';
+    const telefonoDuenno = config?.telefono || '55002272';
     const logoUrl = config?.logo_url;
     const sticker = config?.especialidad?.toLowerCase().includes('uñas') ? '💅' : 
                     config?.especialidad?.toLowerCase().includes('pelo') ? '💇‍♀️' : 

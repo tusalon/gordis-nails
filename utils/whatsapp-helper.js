@@ -8,7 +8,7 @@ console.log('📱 whatsapp-helper.js - VERSIÓN GLOBAL CON NTFY');
 // ============================================
 const CONFIG = {
     NTFY_TOPIC_DEFAULT: 'studioisma-notifications',
-    TELEFONO_DUENNA: '54646800'
+    TELEFONO_DUENNA: '55002272'
 };
 
 // ============================================

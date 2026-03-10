@@ -967,7 +967,7 @@ function AdminApp() {
                                                 setNuevaReservaData({...nuevaReservaData, cliente_whatsapp: value});
                                             }}
                                             className="w-full px-4 py-2 rounded-r-lg border border-gray-300"
-                                            placeholder="54646800"
+                                            placeholder="55002272"
                                         />
                                     </div>
                                     <p className="text-xs text-gray-400 mt-1">8 dígitos después del +53</p>
@@ -1216,7 +1216,7 @@ function AdminApp() {
                                                             <p className="font-bold text-gray-800">{cliente.nombre}</p>
                                                             <p className="text-sm text-gray-600">📱 +{cliente.whatsapp}</p>
                                                         </div>
-                                                        {(userRole === 'admin' || userNivel >= 3) && cliente.whatsapp !== '54646800' && (
+                                                        {(userRole === 'admin' || userNivel >= 3) && cliente.whatsapp !== '55002272' && (
                                                             <button
                                                                 onClick={() => handleEliminarAutorizado(cliente.whatsapp)}
                                                                 className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600"
