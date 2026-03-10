@@ -217,14 +217,11 @@ END:VCALENDAR`;
 💈 *Servicio:* ${datosReserva.servicio}
 👩‍🎨 *Profesional:* ${datosReserva.profesional_nombre}
 
-💰 *Para confirmar tu turno*, enviá el *anticipo de $500* por:
+💰 *Para confirmar tu turno*, enviar el *anticipo de 500 cup por:
 
 🏦 *Transferencia bancaria:* 
-   CBU: 1234567890123456789012
-   Alias: GORDIS.ANTICIPO
-
-📲 *Mercado Pago:* 
-   https://mpago.li/......
+   Tarjeta a transferir: 9224 0699 9844 5056
+   Número a confirmar: 55002272
 
 📱 *WhatsApp para comprobantes:* 
    +53 55002272
