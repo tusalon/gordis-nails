@@ -1,4 +1,4 @@
-// utils/whatsapp-helper.js - VERSIÓN DINÁMICA (SIRVE PARA TODOS LOS NEGOCIOS)
+// utils/whatsapp-helper.js - VERSIÓN DINÁMICA (CORREGIDA)
 
 console.log('📱 whatsapp-helper.js - VERSIÓN DINÁMICA');
 
@@ -66,7 +66,7 @@ window.enviarWhatsApp = function(telefono, mensaje) {
 };
 
 // ============================================
-// FUNCIÓN PARA ENVIAR NOTIFICACIÓN PUSH
+// FUNCIÓN PARA ENVIAR NOTIFICACIÓN PUSH (CORREGIDA)
 // ============================================
 window.enviarNotificacionPush = async function(titulo, mensaje, etiquetas = 'bell', prioridad = 'default') {
     try {
@@ -75,11 +75,14 @@ window.enviarNotificacionPush = async function(titulo, mensaje, etiquetas = 'bel
         
         console.log(`📢 Enviando push a ntfy.sh/${topic}:`, titulo);
         
+        // Eliminar caracteres no ASCII del título
+        const tituloLimpio = titulo.replace(/[^\x00-\x7F]/g, '');
+        
         const response = await fetch(`https://ntfy.sh/${topic}`, {
             method: 'POST',
             body: mensaje,
             headers: {
-                'Title': titulo,
+                'Title': tituloLimpio,
                 'Priority': prioridad,
                 'Tags': etiquetas
             }
