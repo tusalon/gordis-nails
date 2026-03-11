@@ -792,7 +792,7 @@ function AdminApp() {
         });
     }, [userRole, userNivel, profesional]);
 
-    // ============================================
+   // ============================================
 // FUNCIÓN PARA CONFIRMAR PAGO (CON WHATSAPP AL CLIENTE)
 // ============================================
 const confirmarPago = async (id, bookingData) => {
@@ -822,14 +822,43 @@ const confirmarPago = async (id, bookingData) => {
         // 🔥 ENVIAR WHATSAPP DE CONFIRMACIÓN AL CLIENTE
         console.log('📤 Enviando confirmación de turno al cliente...');
         
-        // Crear un objeto con los datos actualizados
-        const reservaConfirmada = {
-            ...bookingData,
-            estado: 'Reservado'
-        };
+        // Formatear fecha con día de la semana
+        const fechaConDia = window.formatFechaCompleta ? 
+            window.formatFechaCompleta(bookingData.fecha) : 
+            bookingData.fecha;
         
-        // Usar la función que ya existe para notificar nueva reserva
+        // Formatear hora a 12h
+        const horaFormateada = window.formatTo12Hour ? 
+            window.formatTo12Hour(bookingData.hora_inicio) : 
+            bookingData.hora_inicio;
+        
+        // Obtener nombre del negocio
+        const nombreNegocio = await window.getNombreNegocio ? 
+            await window.getNombreNegocio() : 
+            'GordisNailsbySandra';
+        
+        // Crear mensaje para el cliente
+        const mensajeCliente = 
+`💅 *${nombreNegocio} - Turno Confirmado* 🎉
+
+Hola *${bookingData.cliente_nombre}*, ¡tu turno ha sido CONFIRMADO!
+
+📅 *Fecha:* ${fechaConDia}
+⏰ *Hora:* ${horaFormateada}
+💈 *Servicio:* ${bookingData.servicio}
+👩‍🎨 *Profesional:* ${bookingData.profesional_nombre || bookingData.trabajador_nombre}
+
+✅ *Pago recibido correctamente*
+
+Te esperamos 💖
+Cualquier cambio, puedes cancelarlo desde la app con hasta 1 hora de anticipación.`;
+
+        // Enviar WhatsApp al cliente
+        window.enviarWhatsApp(bookingData.cliente_whatsapp, mensajeCliente);
+        
+        // Notificar a la dueña que el turno está confirmado
         if (window.notificarNuevaReserva) {
+            const reservaConfirmada = { ...bookingData, estado: 'Reservado' };
             await window.notificarNuevaReserva(reservaConfirmada);
         }
         
