@@ -46,6 +46,7 @@ function WelcomeScreen({ onStart, onGoBack, cliente, userRol }) {
         const telefonoLimpio = config.telefono.replace(/\D/g, '');
         const mensaje = encodeURIComponent(`Hola! Quiero consultar sobre turnos en ${config?.nombre || 'el salón'}`);
         
+        // Abrir WhatsApp
         window.open(`https://wa.me/${telefonoLimpio}?text=${mensaje}`, '_blank');
     };
 
@@ -55,15 +56,22 @@ function WelcomeScreen({ onStart, onGoBack, cliente, userRol }) {
             return;
         }
         
+        // Limpiar el usuario (quitar @ si lo tiene)
         let usuario = config.instagram.replace('@', '').trim();
+        
+        // Abrir Instagram (app o web)
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
         
         if (isMobile) {
+            // Intentar abrir la app primero
             window.location.href = `instagram://user?username=${usuario}`;
+            
+            // Si no abre la app, abrir web después de 1 segundo
             setTimeout(() => {
                 window.open(`https://instagram.com/${usuario}`, '_blank');
             }, 1000);
         } else {
+            // Desktop: abrir web directamente
             window.open(`https://instagram.com/${usuario}`, '_blank');
         }
     };
@@ -74,13 +82,17 @@ function WelcomeScreen({ onStart, onGoBack, cliente, userRol }) {
             return;
         }
         
+        // Limpiar la URL/página
         let pagina = config.facebook.trim();
         
+        // Si solo es el nombre, construir URL
         if (!pagina.startsWith('http')) {
+            // Sacar @ si tiene
             pagina = pagina.replace('@', '');
             pagina = `https://facebook.com/${pagina}`;
         }
         
+        // Abrir Facebook
         window.open(pagina, '_blank');
     };
 
@@ -92,7 +104,9 @@ function WelcomeScreen({ onStart, onGoBack, cliente, userRol }) {
     const tieneRedes = tieneWhatsApp || tieneInstagram || tieneFacebook;
 
     return (
-        <div className="relative min-h-screen w-full overflow-y-auto">
+        <div 
+            className="relative min-h-screen w-full overflow-y-auto"
+        >
             {/* Imagen de fondo fija */}
             <div className="fixed inset-0 z-0">
                 <img 
@@ -134,12 +148,15 @@ function WelcomeScreen({ onStart, onGoBack, cliente, userRol }) {
                             </div>
                         )}
                         
-                        <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white leading-tight drop-shadow-lg">
-                            Bienvenida a <br/>
-                            <span className="text-4xl sm:text-5xl md:text-6xl text-pink-300 break-words">
+                        {/* 🔥 TÍTULO CORREGIDO - SIN DESBORDAMIENTO */}
+                        <div className="space-y-2">
+                            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white leading-tight drop-shadow-lg">
+                                Bienvenida a
+                            </h1>
+                            <div className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-pink-300 break-words px-2">
                                 {config?.nombre || 'Mi Salón'}
-                            </span>
-                        </h1>
+                            </div>
+                        </div>
                         
                         {cliente && (
                             <p className="text-white/90 text-base sm:text-lg bg-black/20 inline-block px-4 py-1 rounded-full">

@@ -1,4 +1,5 @@
 // components/admin/ServiciosPanel.js - CON PRECIO ÚNICO (CORREGIDO)
+// CORRECCIÓN: Se añadió [appearance:auto] a los inputs numéricos para móviles
 
 function ServiciosPanel() {
     const [servicios, setServicios] = React.useState([]);
@@ -232,7 +233,8 @@ function ServicioForm({ servicio, onGuardar, onCancelar }) {
                                     duracion: isNaN(valor) ? 45 : Math.max(15, valor)
                                 });
                             }}
-                            className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                            // 🔥 SOLUCIÓN: Añadir [appearance:auto] para forzar los spinners en móvil
+                            className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 [appearance:auto]"
                             required
                             min="15"
                             max="480"
@@ -255,7 +257,8 @@ function ServicioForm({ servicio, onGuardar, onCancelar }) {
                                     precio: isNaN(valor) ? 0 : Math.max(0, valor)
                                 });
                             }}
-                            className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                            // 🔥 SOLUCIÓN: Añadir [appearance:auto] para forzar los spinners en móvil
+                            className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 [appearance:auto]"
                             required
                             min="0"
                             step="0.5"
