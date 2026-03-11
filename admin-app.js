@@ -793,7 +793,7 @@ function AdminApp() {
     }, [userRole, userNivel, profesional]);
 
    // ============================================
-// FUNCIÓN PARA CONFIRMAR PAGO (CON WHATSAPP AL CLIENTE)
+// FUNCIÓN PARA CONFIRMAR PAGO (CORREGIDA - ENVÍA SOLO AL CLIENTE)
 // ============================================
 const confirmarPago = async (id, bookingData) => {
     if (!confirm(`¿Confirmar que se recibió el pago de ${bookingData.cliente_nombre}? El turno pasará a "Reservado".`)) return;
@@ -819,7 +819,7 @@ const confirmarPago = async (id, bookingData) => {
             throw new Error('Error al confirmar pago');
         }
         
-        // 🔥 ENVIAR WHATSAPP DE CONFIRMACIÓN AL CLIENTE
+        // 🔥 ENVIAR WHATSAPP DIRECTAMENTE AL CLIENTE (SIN USAR notificarNuevaReserva)
         console.log('📤 Enviando confirmación de turno al cliente...');
         
         // Formatear fecha con día de la semana
@@ -851,16 +851,12 @@ Hola *${bookingData.cliente_nombre}*, ¡tu turno ha sido CONFIRMADO!
 ✅ *Pago recibido correctamente*
 
 Te esperamos 💖
-Cualquier cambio, puedes cancelarlo desde la app con hasta 1 hora de anticipación.`;
+Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipación.`;
 
-        // Enviar WhatsApp al cliente
+        // ✅ ENVIAR SOLO AL CLIENTE
         window.enviarWhatsApp(bookingData.cliente_whatsapp, mensajeCliente);
         
-        // Notificar a la dueña que el turno está confirmado
-        if (window.notificarNuevaReserva) {
-            const reservaConfirmada = { ...bookingData, estado: 'Reservado' };
-            await window.notificarNuevaReserva(reservaConfirmada);
-        }
+        // ❌ ELIMINADO: window.notificarNuevaReserva (eso iba a la dueña)
         
         alert('✅ Pago confirmado. Turno reservado y cliente notificado.');
         fetchBookings(); // Recargar reservas
