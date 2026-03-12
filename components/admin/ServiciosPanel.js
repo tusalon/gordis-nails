@@ -1,10 +1,9 @@
-// components/admin/ServiciosPanel.js - CON PRECIO ÚNICO (CORREGIDO)
-// CORRECCIÓN: Se añadió [appearance:auto] a los inputs numéricos para móviles
+// components/admin/ServiciosPanel.js - CON CONTROLES NUMÉRICOS MEJORADOS
+// MEJORA: Añade botones + y - además del campo de texto
 
 function ServiciosPanel() {
     const [servicios, setServicios] = React.useState([]);
     const [mostrarForm, setMostrarForm] = React.useState(false);
-    // 🔥 CORREGIDO: Faltaba el signo =
     const [editando, setEditando] = React.useState(null);
     const [cargando, setCargando] = React.useState(true);
 
@@ -170,6 +169,7 @@ function ServiciosPanel() {
     );
 }
 
+// COMPONENTE MEJORADO: Ahora tiene botones + y - para los números
 function ServicioForm({ servicio, onGuardar, onCancelar }) {
     const [form, setForm] = React.useState(servicio || {
         nombre: '',
@@ -177,6 +177,38 @@ function ServicioForm({ servicio, onGuardar, onCancelar }) {
         precio: 0,
         descripcion: ''
     });
+
+    // Función para incrementar duración en múltiplos de 15
+    const incrementarDuracion = () => {
+        setForm(prev => ({
+            ...prev,
+            duracion: Math.min(480, prev.duracion + 15)
+        }));
+    };
+
+    // Función para decrementar duración en múltiplos de 15
+    const decrementarDuracion = () => {
+        setForm(prev => ({
+            ...prev,
+            duracion: Math.max(15, prev.duracion - 15)
+        }));
+    };
+
+    // Función para incrementar precio
+    const incrementarPrecio = () => {
+        setForm(prev => ({
+            ...prev,
+            precio: prev.precio + 500
+        }));
+    };
+
+    // Función para decrementar precio
+    const decrementarPrecio = () => {
+        setForm(prev => ({
+            ...prev,
+            precio: Math.max(0, prev.precio - 500)
+        }));
+    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -219,50 +251,83 @@ function ServicioForm({ servicio, onGuardar, onCancelar }) {
                 </div>
                 
                 <div className="grid grid-cols-2 gap-2">
+                    {/* CAMPO DE DURACIÓN MEJORADO */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                             Duración (min) *
                         </label>
-                        <input
-                            type="number"
-                            value={form.duracion}
-                            onChange={(e) => {
-                                const valor = parseInt(e.target.value);
-                                setForm({
-                                    ...form, 
-                                    duracion: isNaN(valor) ? 45 : Math.max(15, valor)
-                                });
-                            }}
-                            // 🔥 SOLUCIÓN: Añadir [appearance:auto] para forzar los spinners en móvil
-                            className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 [appearance:auto]"
-                            required
-                            min="15"
-                            max="480"
-                            step="15"
-                        />
-                        <p className="text-xs text-gray-400 mt-1">Múltiplos de 15 min</p>
+                        <div className="flex">
+                            <button
+                                type="button"
+                                onClick={decrementarDuracion}
+                                className="px-3 py-2 bg-gray-200 border border-r-0 rounded-l-lg hover:bg-gray-300 font-bold text-lg"
+                            >
+                                -
+                            </button>
+                            <input
+                                type="number"
+                                value={form.duracion}
+                                onChange={(e) => {
+                                    const valor = parseInt(e.target.value);
+                                    setForm({
+                                        ...form, 
+                                        duracion: isNaN(valor) ? 45 : Math.min(480, Math.max(15, valor))
+                                    });
+                                }}
+                                className="w-full border border-gray-300 px-3 py-2 text-center focus:ring-2 focus:ring-amber-500 focus:border-amber-500 [appearance:auto]"
+                                required
+                                min="15"
+                                max="480"
+                                step="15"
+                            />
+                            <button
+                                type="button"
+                                onClick={incrementarDuracion}
+                                className="px-3 py-2 bg-gray-200 border border-l-0 rounded-r-lg hover:bg-gray-300 font-bold text-lg"
+                            >
+                                +
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">Múltiplos de 15 min (podés escribir o usar los botones)</p>
                     </div>
                     
+                    {/* CAMPO DE PRECIO MEJORADO */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
                             Precio ($) *
                         </label>
-                        <input
-                            type="number"
-                            value={form.precio}
-                            onChange={(e) => {
-                                const valor = parseFloat(e.target.value);
-                                setForm({
-                                    ...form, 
-                                    precio: isNaN(valor) ? 0 : Math.max(0, valor)
-                                });
-                            }}
-                            // 🔥 SOLUCIÓN: Añadir [appearance:auto] para forzar los spinners en móvil
-                            className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 [appearance:auto]"
-                            required
-                            min="0"
-                            step="0.5"
-                        />
+                        <div className="flex">
+                            <button
+                                type="button"
+                                onClick={decrementarPrecio}
+                                className="px-3 py-2 bg-gray-200 border border-r-0 rounded-l-lg hover:bg-gray-300 font-bold text-lg"
+                            >
+                                -
+                            </button>
+                            <input
+                                type="number"
+                                value={form.precio}
+                                onChange={(e) => {
+                                    const valor = parseFloat(e.target.value);
+                                    setForm({
+                                        ...form, 
+                                        precio: isNaN(valor) ? 0 : Math.max(0, valor)
+                                    });
+                                }}
+                                className="w-full border border-gray-300 px-3 py-2 text-center focus:ring-2 focus:ring-amber-500 focus:border-amber-500 [appearance:auto]"
+                                required
+                                min="0"
+                                step="0.5"
+                            />
+                            <button
+                                type="button"
+                                onClick={incrementarPrecio}
+                                className="px-3 py-2 bg-gray-200 border border-l-0 rounded-r-lg hover:bg-gray-300 font-bold text-lg"
+                            >
+                                +
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">Podés escribir o usar los botones (+$500)</p>
                     </div>
                 </div>
                 
