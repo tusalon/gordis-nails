@@ -1,5 +1,6 @@
 // components/BookingForm.js - VERSIÓN IPHONE (con estilos originales)
 // MODIFICADO PARA GORDISNAILS - ENVÍO DE PAGO Y CONFIRMACIÓN POR WHATSAPP
+// + USO DE CONFIGURACIÓN DE ANTICIPO
 
 function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cliente }) {
     const [submitting, setSubmitting] = React.useState(false);
@@ -69,11 +70,9 @@ function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cli
     function generarArchivoCalendario(bookingData) {
         const uid = generarUUID();
         
-        // Fechas UTC
         const dtstart = formatearFechaUTC(bookingData.fecha, bookingData.hora_inicio);
         const dtend = formatearFechaUTC(bookingData.fecha, bookingData.hora_fin);
         
-        // Fecha del sistema
         const ahora = new Date();
         const stampYear = ahora.getUTCFullYear();
         const stampMonth = String(ahora.getUTCMonth() + 1).padStart(2, '0');
@@ -82,13 +81,11 @@ function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cli
         const stampMin = String(ahora.getUTCMinutes()).padStart(2, '0');
         const dtstamp = `${stampYear}${stampMonth}${stampDay}T${stampHour}${stampMin}00`;
         
-        // Fechas legibles
         const fecha = new Date(bookingData.fecha + 'T' + bookingData.hora_inicio + ':00');
         const fechaFin = new Date(bookingData.fecha + 'T' + bookingData.hora_fin + ':00');
         
         const meses = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         
-        // Fecha inicio
         const dia = fecha.getDate();
         const mes = meses[fecha.getMonth()];
         const año = fecha.getFullYear();
@@ -99,14 +96,12 @@ function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cli
         horas = horas ? horas : 12;
         const fechaInicioStr = `${dia} ${mes} ${año} ${horas}:${minutos} ${ampm}`;
         
-        // Fecha fin
         let horasFin = fechaFin.getHours();
         const minutosFin = fechaFin.getMinutes().toString().padStart(2, '0');
         const ampmFin = horasFin >= 12 ? 'PM' : 'AM';
         horasFin = horasFin % 12;
         horasFin = horasFin ? horasFin : 12;
         
-        // Crear descripción con líneas PARTIDAS
         const linea1 = `Appointment Details`;
         const linea2 = `When: ${fechaInicioStr} - ${horasFin}:${minutosFin} ${ampmFin} (CST)`;
         const linea3 = `Service: ${bookingData.servicio}`;
@@ -116,7 +111,6 @@ function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cli
         const linea7 = ``;
         const linea8 = `GordisNailsbySandra`;
         
-        // Aplicar partición de líneas largas
         const descripcion = `${partirLinea(linea1)}\n${partirLinea(linea2)}\n${partirLinea(linea3)}\n${partirLinea(linea4)}\n${partirLinea(linea5)}\n${partirLinea(linea6)}\n${linea7}\n${linea8}`;
         
         return `BEGIN:VCALENDAR
@@ -195,10 +189,22 @@ END:VCALENDAR`;
     }
 
     // ============================================
-    // FUNCIÓN PARA ENVIAR DATOS DE PAGO POR WHATSAPP
+    // 🆕 FUNCIÓN ACTUALIZADA: ENVÍA DATOS DE PAGO SEGÚN CONFIGURACIÓN
     // ============================================
-    function enviarDatosPagoWhatsApp(clienteWhatsapp, datosReserva) {
+    async function enviarDatosPagoWhatsApp(clienteWhatsapp, datosReserva) {
         try {
+            // Cargar configuración del negocio
+            const configNegocio = await window.cargarConfiguracionNegocio();
+            
+            // Si el negocio requiere anticipo y tiene configuración personalizada
+            if (configNegocio?.requiere_anticipo && window.enviarMensajePago) {
+                console.log('💰 Usando mensaje de pago personalizado');
+                await window.enviarMensajePago(datosReserva, configNegocio);
+                return true;
+            }
+            
+            // 🔥 COMPORTAMIENTO ANTERIOR (solo para compatibilidad)
+            console.log('📱 Usando mensaje de pago por defecto (sin configuración de anticipo)');
             const fechaConDia = window.formatFechaCompleta ? 
                 window.formatFechaCompleta(datosReserva.fecha) : 
                 datosReserva.fecha;
@@ -260,7 +266,6 @@ El turno se cancelará automáticamente si no se confirma el pago dentro de las 
 
             const endTime = calculateEndTime(time, service.duracion);
 
-            // 🔥 Estado "Pendiente"
             const bookingData = {
                 cliente_nombre: cliente.nombre,
                 cliente_whatsapp: cliente.whatsapp,
@@ -280,7 +285,7 @@ El turno se cancelará automáticamente si no se confirma el pago dentro de las 
                 console.log('✅ Reserva creada en estado PENDIENTE');
                 
                 // 🔥 1. ENVIAR DATOS DE PAGO POR WHATSAPP AL CLIENTE
-                enviarDatosPagoWhatsApp(cliente.whatsapp, result.data);
+                await enviarDatosPagoWhatsApp(cliente.whatsapp, result.data);
                 
                 // Generar y descargar archivo ICS
                 const icsContent = generarArchivoCalendario(result.data);

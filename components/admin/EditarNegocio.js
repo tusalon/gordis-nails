@@ -1,4 +1,5 @@
 // components/admin/EditarNegocio.js - VERSIÓN SIN COLORES (CONSERVA LOGO Y HORARIO)
+// + NUEVA SECCIÓN DE ANTICIPOS
 
 function EditarNegocio() {
     const [negocioId, setNegocioId] = React.useState(null);
@@ -11,9 +12,6 @@ function EditarNegocio() {
         telefono: '',
         email: '',
         direccion: '',
-        // 🗑️ COLORES ELIMINADOS
-        // color_primario: '#c49b63',
-        // color_secundario: '#f59e0b',
         logo_url: '',
         logo_preview: '',
         logo_file: null,
@@ -21,7 +19,17 @@ function EditarNegocio() {
         mensaje_confirmacion: '',
         instagram: '',
         facebook: '',
-        horario_atencion: ''
+        horario_atencion: '',
+        // 🆕 NUEVOS CAMPOS DE ANTICIPO
+        requiere_anticipo: false,
+        tipo_anticipo: 'fijo',
+        valor_anticipo: '',
+        mensaje_pago: 'Para confirmar tu turno, realizá el pago del anticipo de ${monto_anticipo} a la siguiente cuenta:\n\nCBU: {cbu}\nAlias: {alias}\nTitular: {titular}\n\nTenés {tiempo_vencimiento} horas para realizar el pago. Si no se confirma el pago en ese tiempo, el turno se cancelará automáticamente.',
+        cbu: '',
+        alias: '',
+        titular: '',
+        banco: '',
+        tiempo_vencimiento: 2
     });
 
     // Cargar datos al iniciar
@@ -50,7 +58,6 @@ function EditarNegocio() {
                     telefono: configData.telefono || '',
                     email: configData.email || '',
                     direccion: configData.direccion || '',
-                    // 🗑️ COLORES ELIMINADOS - ya no se cargan
                     logo_url: configData.logo_url || '',
                     logo_preview: configData.logo_url || '',
                     logo_file: null,
@@ -58,7 +65,17 @@ function EditarNegocio() {
                     mensaje_confirmacion: configData.mensaje_confirmacion || 'Tu turno ha sido reservado',
                     instagram: configData.instagram || '',
                     facebook: configData.facebook || '',
-                    horario_atencion: configData.horario_atencion || ''
+                    horario_atencion: configData.horario_atencion || '',
+                    // 🆕 CARGAR CAMPOS DE ANTICIPO
+                    requiere_anticipo: configData.requiere_anticipo || false,
+                    tipo_anticipo: configData.tipo_anticipo || 'fijo',
+                    valor_anticipo: configData.valor_anticipo || '',
+                    mensaje_pago: configData.mensaje_pago || 'Para confirmar tu turno, realizá el pago del anticipo de ${monto_anticipo} a la siguiente cuenta:\n\nCBU: {cbu}\nAlias: {alias}\nTitular: {titular}\n\nTenés {tiempo_vencimiento} horas para realizar el pago. Si no se confirma el pago en ese tiempo, el turno se cancelará automáticamente.',
+                    cbu: configData.cbu || '',
+                    alias: configData.alias || '',
+                    titular: configData.titular || '',
+                    banco: configData.banco || '',
+                    tiempo_vencimiento: configData.tiempo_vencimiento || 2
                 });
             }
         } catch (error) {
@@ -154,13 +171,22 @@ function EditarNegocio() {
                 telefono: config.telefono,
                 email: config.email || null,
                 direccion: config.direccion || null,
-                // 🗑️ COLORES ELIMINADOS - ya no se envían
                 mensaje_bienvenida: config.mensaje_bienvenida,
                 mensaje_confirmacion: config.mensaje_confirmacion,
                 instagram: config.instagram || null,
                 facebook: config.facebook || null,
                 horario_atencion: config.horario_atencion || null,
                 logo_url: logo_url,
+                // 🆕 INCLUIR CAMPOS DE ANTICIPO
+                requiere_anticipo: config.requiere_anticipo,
+                tipo_anticipo: config.tipo_anticipo,
+                valor_anticipo: config.valor_anticipo ? parseFloat(config.valor_anticipo) : null,
+                mensaje_pago: config.mensaje_pago || null,
+                cbu: config.cbu || null,
+                alias: config.alias || null,
+                titular: config.titular || null,
+                banco: config.banco || null,
+                tiempo_vencimiento: config.tiempo_vencimiento ? parseInt(config.tiempo_vencimiento) : 2,
                 updated_at: new Date().toISOString()
             };
 
@@ -318,16 +344,14 @@ function EditarNegocio() {
                             </div>
                         </div>
 
-                        {/* SECCIÓN 2: Personalización visual (SOLO LOGO Y HORARIO) */}
+                        {/* SECCIÓN 2: Personalización visual */}
                         <div className="pt-4 border-t">
                             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                                 <i className="icon-palette text-amber-500"></i>
                                 Personalización
                             </h2>
                             
-                            {/* 🗑️ SECCIÓN DE COLORES ELIMINADA */}
-
-                            {/* Logo (SE CONSERVA) */}
+                            {/* Logo */}
                             <div className="mb-4">
                                 <label className="block text-sm font-medium text-gray-700 mb-2">
                                     Logo del negocio
@@ -358,7 +382,7 @@ function EditarNegocio() {
                                 </div>
                             </div>
 
-                            {/* Horario de atención (SE CONSERVA) */}
+                            {/* Horario de atención */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Horario de atención
@@ -373,7 +397,188 @@ function EditarNegocio() {
                             </div>
                         </div>
 
-                        {/* SECCIÓN 3: Mensajes */}
+                        {/* 🆕 SECCIÓN 3: Anticipos (NUEVA) */}
+                        <div className="pt-4 border-t">
+                            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                                <i className="icon-coin-stack text-amber-500"></i>
+                                💰 Anticipos
+                            </h2>
+                            
+                            <div className="space-y-4">
+                                {/* Switch Requerir anticipo */}
+                                <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+                                    <div>
+                                        <label className="font-medium text-gray-700">Requerir anticipo para reservas</label>
+                                        <p className="text-xs text-gray-500 mt-1">Si activás, los clientes deberán pagar un anticipo para confirmar el turno</p>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={config.requiere_anticipo}
+                                            onChange={(e) => setConfig({...config, requiere_anticipo: e.target.checked})}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                                    </label>
+                                </div>
+
+                                {config.requiere_anticipo && (
+                                    <>
+                                        {/* Tipo de anticipo */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Tipo de anticipo
+                                            </label>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setConfig({...config, tipo_anticipo: 'fijo'})}
+                                                    className={`p-4 rounded-lg border-2 transition-all ${
+                                                        config.tipo_anticipo === 'fijo'
+                                                            ? 'border-amber-600 bg-amber-50'
+                                                            : 'border-gray-200 hover:border-amber-300'
+                                                    }`}
+                                                >
+                                                    <div className="text-2xl mb-2">💰</div>
+                                                    <div className="font-medium">Monto fijo</div>
+                                                    <div className="text-xs text-gray-500 mt-1">Ej: $500 por turno</div>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setConfig({...config, tipo_anticipo: 'porcentaje'})}
+                                                    className={`p-4 rounded-lg border-2 transition-all ${
+                                                        config.tipo_anticipo === 'porcentaje'
+                                                            ? 'border-amber-600 bg-amber-50'
+                                                            : 'border-gray-200 hover:border-amber-300'
+                                                    }`}
+                                                >
+                                                    <div className="text-2xl mb-2">📊</div>
+                                                    <div className="font-medium">Porcentaje</div>
+                                                    <div className="text-xs text-gray-500 mt-1">Ej: 30% del servicio</div>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Valor del anticipo */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                {config.tipo_anticipo === 'fijo' ? 'Monto del anticipo ($)' : 'Porcentaje del servicio (%)'}
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={config.valor_anticipo}
+                                                onChange={(e) => setConfig({...config, valor_anticipo: e.target.value})}
+                                                className="w-full border rounded-lg px-3 py-2"
+                                                placeholder={config.tipo_anticipo === 'fijo' ? 'Ej: 500' : 'Ej: 30'}
+                                                min="0"
+                                                step={config.tipo_anticipo === 'fijo' ? "1" : "0.1"}
+                                            />
+                                        </div>
+
+                                        {/* Tiempo de vencimiento */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Tiempo para pagar (horas)
+                                            </label>
+                                            <select
+                                                value={config.tiempo_vencimiento}
+                                                onChange={(e) => setConfig({...config, tiempo_vencimiento: parseInt(e.target.value)})}
+                                                className="w-full border rounded-lg px-3 py-2"
+                                            >
+                                                <option value="1">1 hora</option>
+                                                <option value="2">2 horas</option>
+                                                <option value="3">3 horas</option>
+                                                <option value="6">6 horas</option>
+                                                <option value="12">12 horas</option>
+                                                <option value="24">24 horas</option>
+                                                <option value="48">48 horas</option>
+                                            </select>
+                                            <p className="text-xs text-gray-500 mt-1">Si no paga en este tiempo, la reserva se cancela automáticamente</p>
+                                        </div>
+
+                                        {/* Datos bancarios */}
+                                        <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
+                                            <h3 className="font-medium text-gray-700">Datos de la cuenta</h3>
+                                            
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Banco</label>
+                                                <input
+                                                    type="text"
+                                                    value={config.banco}
+                                                    onChange={(e) => setConfig({...config, banco: e.target.value})}
+                                                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                                                    placeholder="Ej: Banco Santander"
+                                                />
+                                            </div>
+                                            
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">CBU (22 dígitos)</label>
+                                                <input
+                                                    type="text"
+                                                    value={config.cbu}
+                                                    onChange={(e) => setConfig({...config, cbu: e.target.value.replace(/\D/g, '')})}
+                                                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                                                    placeholder="0000000000000000000000"
+                                                    maxLength="22"
+                                                />
+                                            </div>
+                                            
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Alias</label>
+                                                <input
+                                                    type="text"
+                                                    value={config.alias}
+                                                    onChange={(e) => setConfig({...config, alias: e.target.value})}
+                                                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                                                    placeholder="Ej: SALON.BELLEZA"
+                                                />
+                                            </div>
+                                            
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Titular</label>
+                                                <input
+                                                    type="text"
+                                                    value={config.titular}
+                                                    onChange={(e) => setConfig({...config, titular: e.target.value})}
+                                                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                                                    placeholder="Ej: María González"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Mensaje personalizado */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Mensaje para el cliente
+                                            </label>
+                                            <textarea
+                                                value={config.mensaje_pago}
+                                                onChange={(e) => setConfig({...config, mensaje_pago: e.target.value})}
+                                                className="w-full border rounded-lg px-3 py-2"
+                                                rows="8"
+                                            />
+                                            <div className="bg-blue-50 p-3 rounded-lg mt-2 text-xs">
+                                                <p className="font-medium text-blue-700 mb-2">Variables disponibles:</p>
+                                                <div className="grid grid-cols-2 gap-2 text-blue-600">
+                                                    <span><code>{'{monto_anticipo}'}</code> - Monto calculado</span>
+                                                    <span><code>{'{servicio}'}</code> - Nombre del servicio</span>
+                                                    <span><code>{'{fecha}'}</code> - Fecha del turno</span>
+                                                    <span><code>{'{hora}'}</code> - Hora del turno</span>
+                                                    <span><code>{'{profesional}'}</code> - Profesional</span>
+                                                    <span><code>{'{cbu}'}</code> - CBU</span>
+                                                    <span><code>{'{alias}'}</code> - Alias</span>
+                                                    <span><code>{'{titular}'}</code> - Titular</span>
+                                                    <span><code>{'{banco}'}</code> - Banco</span>
+                                                    <span><code>{'{tiempo_vencimiento}'}</code> - Horas para pagar</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* SECCIÓN 4: Mensajes */}
                         <div className="pt-4 border-t">
                             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                                 <i className="icon-message-square text-amber-500"></i>
@@ -406,7 +611,7 @@ function EditarNegocio() {
                             </div>
                         </div>
 
-                        {/* SECCIÓN 4: Redes sociales */}
+                        {/* SECCIÓN 5: Redes sociales */}
                         <div className="pt-4 border-t">
                             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                                 <i className="icon-share-2 text-amber-500"></i>

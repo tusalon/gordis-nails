@@ -1,4 +1,5 @@
 // utils/config-negocio.js - GordisNailsbySandra
+// + NUEVOS CAMPOS PARA ANTICIPO
 console.log('🏢 config-negocio.js cargado');
 
 // ============================================
@@ -46,6 +47,7 @@ window.cargarConfiguracionNegocio = async function(forceRefresh = false) {
         console.log('🌐 Cargando configuración del negocio desde Supabase...');
         console.log('📡 ID del negocio:', negocioId);
         
+        // 🔥 INCLUIR TODOS LOS NUEVOS CAMPOS DE ANTICIPO
         const url = `${window.SUPABASE_URL}/rest/v1/negocios?id=eq.${negocioId}&select=*`;
         
         const response = await fetch(url, {
@@ -72,9 +74,9 @@ window.cargarConfiguracionNegocio = async function(forceRefresh = false) {
             console.log('✅ Configuración cargada:');
             console.log('   - Nombre:', configCache.nombre);
             console.log('   - Teléfono:', configCache.telefono);
-            console.log('   - Email:', configCache.email);
-            console.log('   - Instagram:', configCache.instagram);
-            console.log('   - Logo:', configCache.logo_url);
+            console.log('   - Requiere anticipo:', configCache.requiere_anticipo);
+            console.log('   - Tipo anticipo:', configCache.tipo_anticipo);
+            console.log('   - Valor anticipo:', configCache.valor_anticipo);
             
             const localId = localStorage.getItem('negocioId');
             if (!localId) {
@@ -90,6 +92,45 @@ window.cargarConfiguracionNegocio = async function(forceRefresh = false) {
         console.error('❌ Error cargando configuración:', error);
         return null;
     }
+};
+
+// ============================================
+// 🆕 NUEVOS GETTERS PARA CONFIGURACIÓN DE ANTICIPO
+// ============================================
+
+window.getRequiereAnticipo = async function() {
+    const config = await window.cargarConfiguracionNegocio();
+    return config?.requiere_anticipo || false;
+};
+
+window.getTipoAnticipo = async function() {
+    const config = await window.cargarConfiguracionNegocio();
+    return config?.tipo_anticipo || 'fijo'; // 'fijo' o 'porcentaje'
+};
+
+window.getValorAnticipo = async function() {
+    const config = await window.cargarConfiguracionNegocio();
+    return config?.valor_anticipo || 0;
+};
+
+window.getMensajePago = async function() {
+    const config = await window.cargarConfiguracionNegocio();
+    return config?.mensaje_pago || 'Para confirmar tu turno, realizá el pago del anticipo de ${monto_anticipo} a la siguiente cuenta:';
+};
+
+window.getDatosBancarios = async function() {
+    const config = await window.cargarConfiguracionNegocio();
+    return {
+        cbu: config?.cbu || '',
+        alias: config?.alias || '',
+        titular: config?.titular || '',
+        banco: config?.banco || ''
+    };
+};
+
+window.getTiempoVencimiento = async function() {
+    const config = await window.cargarConfiguracionNegocio();
+    return config?.tiempo_vencimiento || 2; // Horas por defecto
 };
 
 window.getNombreNegocio = async function() {

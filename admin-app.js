@@ -792,8 +792,16 @@ function AdminApp() {
         });
     }, [userRole, userNivel, profesional]);
 
-   // ============================================
-// FUNCIÓN PARA CONFIRMAR PAGO (CORREGIDA - ENVÍA SOLO AL CLIENTE)
+  // admin-app.js - Panel de administración (VERSIÓN CORREGIDA CON WHATSAPP GLOBAL)
+// + MEJORA EN confirmarPago PARA USAR MENSAJE PERSONALIZADO SI CORRESPONDE
+// CLIENTE: GordisNailsbySandra
+
+console.log('🚀 ADMIN-APP.JS - GordisNailsbySandra');
+
+// ... (todo el código existente se mantiene igual hasta la función confirmarPago)
+
+// ============================================
+// FUNCIÓN PARA CONFIRMAR PAGO (MEJORADA)
 // ============================================
 const confirmarPago = async (id, bookingData) => {
     if (!confirm(`¿Confirmar que se recibió el pago de ${bookingData.cliente_nombre}? El turno pasará a "Reservado".`)) return;
@@ -819,8 +827,10 @@ const confirmarPago = async (id, bookingData) => {
             throw new Error('Error al confirmar pago');
         }
         
-        // 🔥 ENVIAR WHATSAPP DIRECTAMENTE AL CLIENTE (SIN USAR notificarNuevaReserva)
         console.log('📤 Enviando confirmación de turno al cliente...');
+        
+        // 🔥 OBTENER CONFIGURACIÓN DEL NEGOCIO
+        const configNegocio = await window.cargarConfiguracionNegocio();
         
         // Formatear fecha con día de la semana
         const fechaConDia = window.formatFechaCompleta ? 
@@ -833,12 +843,32 @@ const confirmarPago = async (id, bookingData) => {
             bookingData.hora_inicio;
         
         // Obtener nombre del negocio
-        const nombreNegocio = await window.getNombreNegocio ? 
+        const nombreNegocio = configNegocio?.nombre || await window.getNombreNegocio ? 
             await window.getNombreNegocio() : 
             'GordisNailsbySandra';
         
-        // Crear mensaje para el cliente
-        const mensajeCliente = 
+        // 🔥 SI EL NEGOCIO TIENE CONFIGURACIÓN DE ANTICIPO, USAR MENSAJE PERSONALIZADO
+        if (configNegocio?.requiere_anticipo && configNegocio?.mensaje_confirmacion) {
+            // Reemplazar variables en el mensaje de confirmación
+            let mensajePersonalizado = configNegocio.mensaje_confirmacion;
+            
+            const variables = {
+                '{nombre_cliente}': bookingData.cliente_nombre,
+                '{servicio}': bookingData.servicio,
+                '{fecha}': fechaConDia,
+                '{hora}': horaFormateada,
+                '{profesional}': bookingData.profesional_nombre || bookingData.trabajador_nombre,
+                '{nombre_negocio}': nombreNegocio
+            };
+            
+            for (const [key, value] of Object.entries(variables)) {
+                mensajePersonalizado = mensajePersonalizado.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
+            }
+            
+            window.enviarWhatsApp(bookingData.cliente_whatsapp, mensajePersonalizado);
+        } else {
+            // 🔥 MENSAJE POR DEFECTO (COMPORTAMIENTO ANTERIOR)
+            const mensajeCliente = 
 `💅 *${nombreNegocio} - Turno Confirmado* 🎉
 
 Hola *${bookingData.cliente_nombre}*, ¡tu turno ha sido CONFIRMADO!
@@ -853,10 +883,8 @@ Hola *${bookingData.cliente_nombre}*, ¡tu turno ha sido CONFIRMADO!
 Te esperamos 💖
 Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipación.`;
 
-        // ✅ ENVIAR SOLO AL CLIENTE
-        window.enviarWhatsApp(bookingData.cliente_whatsapp, mensajeCliente);
-        
-        // ❌ ELIMINADO: window.notificarNuevaReserva (eso iba a la dueña)
+            window.enviarWhatsApp(bookingData.cliente_whatsapp, mensajeCliente);
+        }
         
         alert('✅ Pago confirmado. Turno reservado y cliente notificado.');
         fetchBookings(); // Recargar reservas
@@ -866,6 +894,8 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
         alert('❌ Error al confirmar el pago');
     }
 };
+
+// ... (resto del código de admin-app.js se mantiene igual)
 
     // ============================================
     // HANDLE CANCEL CORREGIDO - USA notificarCancelacion
