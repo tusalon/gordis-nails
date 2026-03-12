@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GordisNailsbySandra - Reserva de Turnos</title>
+    <title>Cargando...</title>
     <meta name="description" content="Reservá tu turno en GordisNailsbySandra - Uñas y belleza">
     
     <!-- PWA Meta Tags con rutas RELATIVAS -->
@@ -82,7 +82,21 @@
     
     <!-- App de clientes -->
     <script src="client-app.js" type="text/babel"></script>
+    <script>
+// Actualizar título dinámico desde la base de datos
+(async function() {
+    try {
+        const nombre = await window.getNombreNegocio();
+        if (nombre) {
+            document.title = `${nombre} - Reserva de Turnos`;
+        }
+    } catch (error) {
+        console.error('Error cargando título:', error);
+    }
+})();
+</script>
 <script>
+    
 // FORZAR PROMPT DE INSTALACIÓN - ULTIMO RECURSO
 window.addEventListener('load', () => {
     if (window.matchMedia('(display-mode: standalone)').matches) {

@@ -99,73 +99,75 @@ function MyBookings({ cliente, onVolver }) {
         }
     };
 
-    // FUNCIÓN CORREGIDA - USA notificarCancelacion
-    const handleCancelarReserva = async (id, bookingData) => {
-        if (!puedeCancelar(bookingData.fecha, bookingData.hora_inicio)) {
-            const fechaConDia = window.formatFechaCompleta ? 
-                window.formatFechaCompleta(bookingData.fecha) : 
-                bookingData.fecha;
-            
-            const mensaje = `❌ No puedes cancelar este turno porque faltan menos de 1 hora.
+    // FUNCIÓN CORREGIDA - USA notificarCancelacion + teléfono dinámico
+const handleCancelarReserva = async (id, bookingData) => {
+    if (!puedeCancelar(bookingData.fecha, bookingData.hora_inicio)) {
+        const fechaConDia = window.formatFechaCompleta ? 
+            window.formatFechaCompleta(bookingData.fecha) : 
+            bookingData.fecha;
+        
+        // 🔥 OBTENER TELÉFONO DE LA BD
+        const telefonoDuenno = await window.getTelefonoDuenno();
+        
+        const mensaje = `❌ No puedes cancelar este turno porque faltan menos de 1 hora.
             
 📅 Tu turno es el ${fechaConDia} a las ${window.formatTo12Hour ? window.formatTo12Hour(bookingData.hora_inicio) : bookingData.hora_inicio}
 
 ⏰ Solo se permiten cancelaciones con al menos 1 hora de anticipación.
 
-Si no puedes asistir, contactanos por WhatsApp al +53 55002272`;
-            
-            alert(mensaje);
-            return;
-        }
+Si no puedes asistir, contactanos por WhatsApp al +53 ${telefonoDuenno}`;
         
-        const fechaConDiaConfirm = window.formatFechaCompleta ? 
-            window.formatFechaCompleta(bookingData.fecha) : 
-            bookingData.fecha;
-        
-        if (!confirm(`¿Estás segura que querés cancelar tu turno del ${fechaConDiaConfirm} a las ${window.formatTo12Hour ? window.formatTo12Hour(bookingData.hora_inicio) : bookingData.hora_inicio}?`)) {
-            return;
-        }
-        
-        setCancelando(true);
-        try {
-            const response = await fetch(
-                `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&id=eq.${id}`,
-                {
-                    method: 'PATCH',
-                    headers: {
-                        'apikey': window.SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ estado: 'Cancelado' })
-                }
-            );
-            
-            if (!response.ok) {
-                throw new Error('Error al cancelar');
+        alert(mensaje);
+        return;
+    }
+    
+    const fechaConDiaConfirm = window.formatFechaCompleta ? 
+        window.formatFechaCompleta(bookingData.fecha) : 
+        bookingData.fecha;
+    
+    if (!confirm(`¿Estás segura que querés cancelar tu turno del ${fechaConDiaConfirm} a las ${window.formatTo12Hour ? window.formatTo12Hour(bookingData.hora_inicio) : bookingData.hora_inicio}?`)) {
+        return;
+    }
+    
+    setCancelando(true);
+    try {
+        const response = await fetch(
+            `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&id=eq.${id}`,
+            {
+                method: 'PATCH',
+                headers: {
+                    'apikey': window.SUPABASE_ANON_KEY,
+                    'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ estado: 'Cancelado' })
             }
-            
-            console.log('📤 Enviando notificaciones de cancelación...');
-            
-            // Marcar que fue cancelado por cliente
-            bookingData.cancelado_por = 'cliente';
-            
-            // ÚNICA LLAMADA - notificarCancelacion ya maneja WhatsApp al dueño + ntfy
-            if (window.notificarCancelacion) {
-                await window.notificarCancelacion(bookingData);
-            }
-            
-            alert('✅ Turno cancelado correctamente');
-            await cargarReservas();
-            
-        } catch (error) {
-            console.error('Error cancelando reserva:', error);
-            alert('Error al cancelar el turno');
-        } finally {
-            setCancelando(false);
+        );
+        
+        if (!response.ok) {
+            throw new Error('Error al cancelar');
         }
-    };
-
+        
+        console.log('📤 Enviando notificaciones de cancelación...');
+        
+        // Marcar que fue cancelado por cliente
+        bookingData.cancelado_por = 'cliente';
+        
+        // ÚNICA LLAMADA - notificarCancelacion ya maneja WhatsApp al dueño + ntfy
+        if (window.notificarCancelacion) {
+            await window.notificarCancelacion(bookingData);
+        }
+        
+        alert('✅ Turno cancelado correctamente');
+        await cargarReservas();
+        
+    } catch (error) {
+        console.error('Error cancelando reserva:', error);
+        alert('Error al cancelar el turno');
+    } finally {
+        setCancelando(false);
+    }
+};
     const reservasFiltradas = bookings.filter(booking => {
         if (filtro === 'activas') return booking.estado !== 'Cancelado';
         if (filtro === 'canceladas') return booking.estado === 'Cancelado';

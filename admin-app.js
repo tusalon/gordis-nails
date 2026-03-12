@@ -847,28 +847,8 @@ const confirmarPago = async (id, bookingData) => {
             await window.getNombreNegocio() : 
             'GordisNailsbySandra';
         
-        // 🔥 SI EL NEGOCIO TIENE CONFIGURACIÓN DE ANTICIPO, USAR MENSAJE PERSONALIZADO
-        if (configNegocio?.requiere_anticipo && configNegocio?.mensaje_confirmacion) {
-            // Reemplazar variables en el mensaje de confirmación
-            let mensajePersonalizado = configNegocio.mensaje_confirmacion;
-            
-            const variables = {
-                '{nombre_cliente}': bookingData.cliente_nombre,
-                '{servicio}': bookingData.servicio,
-                '{fecha}': fechaConDia,
-                '{hora}': horaFormateada,
-                '{profesional}': bookingData.profesional_nombre || bookingData.trabajador_nombre,
-                '{nombre_negocio}': nombreNegocio
-            };
-            
-            for (const [key, value] of Object.entries(variables)) {
-                mensajePersonalizado = mensajePersonalizado.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), value);
-            }
-            
-            window.enviarWhatsApp(bookingData.cliente_whatsapp, mensajePersonalizado);
-        } else {
-            // 🔥 MENSAJE POR DEFECTO (COMPORTAMIENTO ANTERIOR)
-            const mensajeCliente = 
+               // 🔥 SIEMPRE USAR EL MENSAJE BONITO (COMO ERA ANTES)
+        const mensajeCliente = 
 `💅 *${nombreNegocio} - Turno Confirmado* 🎉
 
 Hola *${bookingData.cliente_nombre}*, ¡tu turno ha sido CONFIRMADO!
@@ -883,8 +863,7 @@ Hola *${bookingData.cliente_nombre}*, ¡tu turno ha sido CONFIRMADO!
 Te esperamos 💖
 Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipación.`;
 
-            window.enviarWhatsApp(bookingData.cliente_whatsapp, mensajeCliente);
-        }
+        window.enviarWhatsApp(bookingData.cliente_whatsapp, mensajeCliente);
         
         alert('✅ Pago confirmado. Turno reservado y cliente notificado.');
         fetchBookings(); // Recargar reservas
