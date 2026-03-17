@@ -1,6 +1,6 @@
-// components/BookingForm.js - VERSIÓN IPHONE (con estilos originales)
-// MODIFICADO PARA GORDISNAILS - ENVÍO DE PAGO Y CONFIRMACIÓN POR WHATSAPP
-// + USO DE CONFIGURACIÓN DE ANTICIPO
+// components/BookingForm.js - VERSIÓN GENÉRICA
+// CON LÓGICA COMPLETA DE NOTIFICACIONES (PUSH SIEMPRE)
+// CORREGIDO: Hora local para archivos ICS
 
 function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cliente }) {
     const [submitting, setSubmitting] = React.useState(false);
@@ -40,82 +40,83 @@ function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cli
     }
 
     // ============================================
-    // FORMATEAR FECHA UTC
+    // FORMATEAR FECHA LOCAL (NO UTC)
     // ============================================
-    function formatearFechaUTC(fechaStr, horaStr) {
+    function formatearFechaLocal(fechaStr, horaStr) {
         const [year, month, day] = fechaStr.split('-');
         const [hour, minute] = horaStr.split(':');
         
-        const fecha = new Date(Date.UTC(
-            parseInt(year), 
-            parseInt(month) - 1, 
-            parseInt(day), 
-            parseInt(hour), 
-            parseInt(minute), 
-            0
-        ));
+        const fecha = new Date(year, month - 1, day, hour, minute, 0);
         
-        const yearStr = fecha.getUTCFullYear();
-        const monthStr = String(fecha.getUTCMonth() + 1).padStart(2, '0');
-        const dayStr = String(fecha.getUTCDate()).padStart(2, '0');
-        const hourStr2 = String(fecha.getUTCHours()).padStart(2, '0');
-        const minuteStr = String(fecha.getUTCMinutes()).padStart(2, '0');
+        const yearStr = fecha.getFullYear();
+        const monthStr = String(fecha.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(fecha.getDate()).padStart(2, '0');
+        const hourStr2 = String(fecha.getHours()).padStart(2, '0');
+        const minuteStr = String(fecha.getMinutes()).padStart(2, '0');
         
-        return `${yearStr}${monthStr}${dayStr}T${hourStr2}${minuteStr}00Z`;
+        return `${yearStr}${monthStr}${dayStr}T${hourStr2}${minuteStr}00`;
     }
 
     // ============================================
-    // GENERAR ARCHIVO .ICS
+    // GENERAR ARCHIVO .ICS (CORREGIDO - HORA LOCAL)
     // ============================================
-    function generarArchivoCalendario(bookingData) {
+    function generarArchivoCalendario(bookingData, nombreNegocio) {
         const uid = generarUUID();
         
-        const dtstart = formatearFechaUTC(bookingData.fecha, bookingData.hora_inicio);
-        const dtend = formatearFechaUTC(bookingData.fecha, bookingData.hora_fin);
+        const dtstart = formatearFechaLocal(bookingData.fecha, bookingData.hora_inicio);
+        const dtend = formatearFechaLocal(bookingData.fecha, bookingData.hora_fin);
         
         const ahora = new Date();
-        const stampYear = ahora.getUTCFullYear();
-        const stampMonth = String(ahora.getUTCMonth() + 1).padStart(2, '0');
-        const stampDay = String(ahora.getUTCDate()).padStart(2, '0');
-        const stampHour = String(ahora.getUTCHours()).padStart(2, '0');
-        const stampMin = String(ahora.getUTCMinutes()).padStart(2, '0');
+        const stampYear = ahora.getFullYear();
+        const stampMonth = String(ahora.getMonth() + 1).padStart(2, '0');
+        const stampDay = String(ahora.getDate()).padStart(2, '0');
+        const stampHour = String(ahora.getHours()).padStart(2, '0');
+        const stampMin = String(ahora.getMinutes()).padStart(2, '0');
         const dtstamp = `${stampYear}${stampMonth}${stampDay}T${stampHour}${stampMin}00`;
         
-        const fecha = new Date(bookingData.fecha + 'T' + bookingData.hora_inicio + ':00');
-        const fechaFin = new Date(bookingData.fecha + 'T' + bookingData.hora_fin + ':00');
+        const [year, month, day] = bookingData.fecha.split('-').map(Number);
+        const [startHour, startMinute] = bookingData.hora_inicio.split(':').map(Number);
+        const [endHour, endMinute] = bookingData.hora_fin.split(':').map(Number);
+        
+        const fechaInicio = new Date(year, month - 1, day, startHour, startMinute, 0);
+        const fechaFin = new Date(year, month - 1, day, endHour, endMinute, 0);
         
         const meses = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         
-        const dia = fecha.getDate();
-        const mes = meses[fecha.getMonth()];
-        const año = fecha.getFullYear();
-        let horas = fecha.getHours();
-        const minutos = fecha.getMinutes().toString().padStart(2, '0');
-        const ampm = horas >= 12 ? 'PM' : 'AM';
-        horas = horas % 12;
-        horas = horas ? horas : 12;
-        const fechaInicioStr = `${dia} ${mes} ${año} ${horas}:${minutos} ${ampm}`;
+        const diaInicio = fechaInicio.getDate();
+        const mesInicio = meses[fechaInicio.getMonth()];
+        const añoInicio = fechaInicio.getFullYear();
+        let horasInicio = fechaInicio.getHours();
+        const minutosInicio = fechaInicio.getMinutes().toString().padStart(2, '0');
+        const ampmInicio = horasInicio >= 12 ? 'PM' : 'AM';
+        horasInicio = horasInicio % 12;
+        horasInicio = horasInicio ? horasInicio : 12;
+        const fechaInicioStr = `${diaInicio} ${mesInicio} ${añoInicio} ${horasInicio}:${minutosInicio} ${ampmInicio}`;
         
+        const diaFin = fechaFin.getDate();
+        const mesFin = meses[fechaFin.getMonth()];
+        const añoFin = fechaFin.getFullYear();
         let horasFin = fechaFin.getHours();
         const minutosFin = fechaFin.getMinutes().toString().padStart(2, '0');
         const ampmFin = horasFin >= 12 ? 'PM' : 'AM';
         horasFin = horasFin % 12;
         horasFin = horasFin ? horasFin : 12;
+        const fechaFinStr = `${diaFin} ${mesFin} ${añoFin} ${horasFin}:${minutosFin} ${ampmFin}`;
         
         const linea1 = `Appointment Details`;
-        const linea2 = `When: ${fechaInicioStr} - ${horasFin}:${minutosFin} ${ampmFin} (CST)`;
+        const linea2 = `When: ${fechaInicioStr} - ${fechaFinStr} (CST)`;
         const linea3 = `Service: ${bookingData.servicio}`;
         const linea4 = `Provider Name: ${bookingData.profesional_nombre}`;
         const linea5 = `Client: ${bookingData.cliente_nombre}`;
         const linea6 = `WhatsApp: +53 ${bookingData.cliente_whatsapp}`;
         const linea7 = ``;
-        const linea8 = `GordisNailsbySandra`;
+        const linea8 = nombreNegocio;
         
         const descripcion = `${partirLinea(linea1)}\n${partirLinea(linea2)}\n${partirLinea(linea3)}\n${partirLinea(linea4)}\n${partirLinea(linea5)}\n${partirLinea(linea6)}\n${linea7}\n${linea8}`;
         
         return `BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//GordisNails//Setmore//EN
+PRODID:-//${nombreNegocio}//Setmore//EN
 METHOD:REQUEST
 BEGIN:VTIMEZONE
 TZID:America/Havana
@@ -141,14 +142,14 @@ BEGIN:VEVENT
 UID:${uid}
 SEQUENCE:0
 DTSTAMP:${dtstamp}
-DTSTART:${dtstart}
-DTEND:${dtend}
+DTSTART;TZID=America/Havana:${dtstart}
+DTEND;TZID=America/Havana:${dtend}
 SUMMARY:${bookingData.servicio} with ${bookingData.profesional_nombre}
 TRANSP:OPAQUE
-LOCATION:GordisNailsbySandra
+LOCATION:${nombreNegocio}
 DESCRIPTION:${descripcion}
-ORGANIZER;CN="GordisNailsbySandra":mailto:gordis@email.com
-ATTENDEE;ROLE=CHAIR;CUTYPE=INDIVIDUAL;RSVP=FALSE;CN="GordisNailsbySandra":MAILTO:gordis@email.com
+ORGANIZER;CN="${nombreNegocio}":mailto:info@${nombreNegocio.replace(/\s+/g, '').toLowerCase()}.com
+ATTENDEE;ROLE=CHAIR;CUTYPE=INDIVIDUAL;RSVP=FALSE;CN="${nombreNegocio}":MAILTO:info@${nombreNegocio.replace(/\s+/g, '').toLowerCase()}.com
 ATTENDEE;ROLE=REQ-PARTICIPANT;CUTYPE=INDIVIDUAL;RSVP=FALSE;CN="${bookingData.cliente_nombre}":MAILTO:cliente@email.com
 STATUS:CONFIRMED
 CLASS:PUBLIC
@@ -189,64 +190,7 @@ END:VCALENDAR`;
     }
 
     // ============================================
-    // 🆕 FUNCIÓN ACTUALIZADA: ENVÍA DATOS DE PAGO SEGÚN CONFIGURACIÓN
-    // ============================================
-    async function enviarDatosPagoWhatsApp(clienteWhatsapp, datosReserva) {
-        try {
-            // Cargar configuración del negocio
-            const configNegocio = await window.cargarConfiguracionNegocio();
-            
-            // Si el negocio requiere anticipo y tiene configuración personalizada
-            if (configNegocio?.requiere_anticipo && window.enviarMensajePago) {
-                console.log('💰 Usando mensaje de pago personalizado');
-                await window.enviarMensajePago(datosReserva, configNegocio);
-                return true;
-            }
-            
-            // 🔥 COMPORTAMIENTO ANTERIOR (solo para compatibilidad)
-            console.log('📱 Usando mensaje de pago por defecto (sin configuración de anticipo)');
-            const fechaConDia = window.formatFechaCompleta ? 
-                window.formatFechaCompleta(datosReserva.fecha) : 
-                datosReserva.fecha;
-            
-            const horaFormateada = window.formatTo12Hour ? 
-                window.formatTo12Hour(datosReserva.hora_inicio) : 
-                datosReserva.hora_inicio;
-            
-            const mensajePago = 
-`💅 *GORDISNAILSBYSANDRA*
-
-✅ *SOLICITUD DE TURNO REGISTRADA*
-
-📅 *Fecha:* ${fechaConDia}
-⏰ *Hora:* ${horaFormateada}
-💈 *Servicio:* ${datosReserva.servicio}
-👩‍🎨 *Profesional:* ${datosReserva.profesional_nombre}
-
-💰 *Para confirmar tu turno*, enviar el *anticipo de 500 cup por:
-
-🏦 *Transferencia bancaria:* 
-   Tarjeta a transferir: 9224 0699 9844 5056
-   Número a confirmar: 55002272
-
-📱 *WhatsApp para comprobantes:* 
-   +53 55002272
-
-⏳ *Importante:* 
-El turno se cancelará automáticamente si no se confirma el pago dentro de las 2 horas.
-
-¡Gracias por elegirnos! 💖`;
-
-            window.enviarWhatsApp(clienteWhatsapp, mensajePago);
-            return true;
-        } catch (error) {
-            console.error('Error enviando datos de pago:', error);
-            return false;
-        }
-    }
-
-    // ============================================
-    // HANDLE SUBMIT (CON ESTILOS ORIGINALES)
+    // HANDLE SUBMIT (CORREGIDO - CON PUSH SIEMPRE)
     // ============================================
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -265,6 +209,9 @@ El turno se cancelará automáticamente si no se confirma el pago dentro de las 
             }
 
             const endTime = calculateEndTime(time, service.duracion);
+            
+            const configNegocio = await window.cargarConfiguracionNegocio();
+            const requiereAnticipo = configNegocio?.requiere_anticipo === true;
 
             const bookingData = {
                 cliente_nombre: cliente.nombre,
@@ -276,19 +223,36 @@ El turno se cancelará automáticamente si no se confirma el pago dentro de las 
                 fecha: date,
                 hora_inicio: time,
                 hora_fin: endTime,
-                estado: "Pendiente"
+                estado: requiereAnticipo ? "Pendiente" : "Reservado"
             };
 
             const result = await createBooking(bookingData);
             
             if (result.success && result.data) {
-                console.log('✅ Reserva creada en estado PENDIENTE');
+                console.log(`✅ Reserva creada en estado ${result.data.estado}`);
                 
-                // 🔥 1. ENVIAR DATOS DE PAGO POR WHATSAPP AL CLIENTE
-                await enviarDatosPagoWhatsApp(cliente.whatsapp, result.data);
+                const nombreNegocio = configNegocio?.nombre || 'Mi Salón';
                 
-                // Generar y descargar archivo ICS
-                const icsContent = generarArchivoCalendario(result.data);
+                // 🔥 USAR LAS FUNCIONES CENTRALIZADAS DE WHATSAPP-HELPER
+                if (requiereAnticipo && window.enviarMensajePago) {
+                    await window.enviarMensajePago(result.data, configNegocio);
+                } else if (!requiereAnticipo && window.enviarConfirmacionReserva) {
+                    await window.enviarConfirmacionReserva(result.data, configNegocio);
+                }
+                
+                if (requiereAnticipo) {
+                    if (window.notificarReservaPendiente) {
+                        await window.notificarReservaPendiente(result.data);
+                    }
+                    console.log('📱 Dueña notificada: RESERVA PENDIENTE DE PAGO (con datos + push)');
+                } else {
+                    if (window.notificarNuevaReserva) {
+                        await window.notificarNuevaReserva(result.data);
+                    }
+                    console.log('📱 Dueña notificada: NUEVO TURNO AGENDADO (con push)');
+                }
+                
+                const icsContent = generarArchivoCalendario(result.data, nombreNegocio);
                 
                 const fechaSegura = result.data.fecha.replace(/-/g, '');
                 const horaSegura = result.data.hora_inicio.replace(':', '');
@@ -301,11 +265,6 @@ El turno se cancelará automáticamente si no se confirma el pago dentro de las 
                 
                 descargarArchivoICS(icsContent, nombreArchivo);
                 
-                // 🔥 2. NOTIFICAR A LA DUEÑA (reserva pendiente)
-                if (window.notificarReservaPendiente) {
-                    await window.notificarReservaPendiente(result.data);
-                }
-                
                 onSubmit(result.data);
             }
         } catch (err) {
@@ -317,7 +276,7 @@ El turno se cancelará automáticamente si no se confirma el pago dentro de las 
     };
 
     // ============================================
-    // RENDER (CON ESTILOS ORIGINALES COMPLETOS)
+    // RENDER
     // ============================================
     return (
         <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4 animate-fade-in">
@@ -333,7 +292,6 @@ El turno se cancelará automáticamente si no se confirma el pago dentro de las 
                 </div>
 
                 <div className="space-y-4">
-                    {/* Resumen del turno */}
                     <div className="bg-gradient-to-r from-pink-50 to-pink-100 p-4 rounded-xl border border-pink-200 space-y-2">
                         <div className="flex items-center gap-3 text-pink-700">
                             <span className="text-2xl">
