@@ -1,4 +1,5 @@
 // client-app.js - Aplicación de clientes con flujo completo y PWA
+// MEJORA: Redirección automática según rol al iniciar
 
 console.log('🚀 CLIENT-APP.JS VERSIÓN:', '2024-03-01');
 
@@ -30,35 +31,41 @@ function ClientApp() {
     const [history, setHistory] = React.useState(['auth']);
 
     // ============================================
-    // DETECTAR SESIÓN AL INICIAR
+    // DETECTAR SESIÓN AL INICIAR Y REDIRIGIR SEGÚN ROL
     // ============================================
     React.useEffect(() => {
         const adminAuth = localStorage.getItem('adminAuth') === 'true';
         const profesionalAuth = localStorage.getItem('profesionalAuth');
+        const clienteAuth = localStorage.getItem('clienteAuth');
         
+        // Si es admin, redirigir directamente al panel
         if (adminAuth) {
-            setUserRol('admin');
-        } else if (profesionalAuth) {
-            setUserRol('profesional');
-            try {
-                const profesional = JSON.parse(profesionalAuth);
-                setCliente({
-                    nombre: profesional.nombre,
-                    whatsapp: profesional.telefono
-                });
-            } catch (e) {}
+            console.log('👑 Usuario admin detectado, redirigiendo a admin.html');
+            window.location.href = 'admin.html';
+            return;
         }
         
-        const savedCliente = localStorage.getItem('clienteAuth');
-        if (savedCliente && !adminAuth && !profesionalAuth) {
+        // Si es profesional, redirigir al panel (allí se maneja su rol)
+        if (profesionalAuth) {
+            console.log('👤 Usuario profesional detectado, redirigiendo a admin.html');
+            window.location.href = 'admin.html';
+            return;
+        }
+        
+        // Si es cliente, restaurar sesión y mostrar welcome
+        if (clienteAuth) {
             try {
-                const clienteData = JSON.parse(savedCliente);
+                const clienteData = JSON.parse(clienteAuth);
                 setCliente(clienteData);
                 setUserRol('cliente');
                 setStep('welcome');
                 setHistory(['auth', 'welcome']);
-            } catch (e) {}
+            } catch (e) {
+                console.error('Error al parsear clienteAuth', e);
+                localStorage.removeItem('clienteAuth');
+            }
         }
+        // Si no hay nada, se queda en 'auth'
     }, []);
 
     // ============================================
@@ -158,6 +165,8 @@ function ClientApp() {
         setUserRol('cliente');
         setHistory(['auth']);
         setStep('auth');
+        // Redirigir a index (ya estamos en index, pero reiniciamos estado)
+        window.location.href = 'index.html';
     };
 
     const resetBooking = () => {
@@ -279,9 +288,6 @@ function ClientApp() {
                             
                             {/* WhatsApp Button */}
                             <WhatsAppButton />
-                            
-                         
-                           
                         </div>
                     </div>
                 );
@@ -300,9 +306,6 @@ function ClientApp() {
                             booking={bookingConfirmed} 
                             onReset={resetBooking}
                         />
-                        
-                        {/* Botón de instalación PWA también en confirmación */}
-                        
                     </div>
                 );
             

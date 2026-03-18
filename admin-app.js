@@ -904,20 +904,20 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
         }
     };
 
-    const handleLogout = () => {
-        if (confirm('¿Cerrar sesión?')) {
-            localStorage.removeItem('adminAuth');
-            localStorage.removeItem('adminUser');
-            localStorage.removeItem('adminLoginTime');
-            localStorage.removeItem('profesionalAuth');
-            localStorage.removeItem('userRole');
-            localStorage.removeItem('clienteAuth');
-            localStorage.removeItem('negocioId');
-            
-            console.log('🚪 Sesión cerrada, redirigiendo a login');
-            window.location.href = 'admin-login.html';
-        }
-    };
+   const handleLogout = () => {
+    if (confirm('¿Cerrar sesión?')) {
+        localStorage.removeItem('adminAuth');
+        localStorage.removeItem('adminUser');
+        localStorage.removeItem('adminLoginTime');
+        localStorage.removeItem('profesionalAuth');
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('clienteAuth');
+        localStorage.removeItem('negocioId');
+        
+        console.log('🚪 Sesión cerrada, redirigiendo a index.html');
+        window.location.href = 'index.html'; // Cambiado de admin-login.html a index.html
+    }
+};
 
     // ============================================
     // FILTROS

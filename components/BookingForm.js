@@ -1,6 +1,6 @@
 // components/BookingForm.js - VERSIÓN GENÉRICA
-// CON LÓGICA COMPLETA DE NOTIFICACIONES (PUSH SIEMPRE)
-// CORREGIDO: Hora local para archivos ICS
+// CON LÓGICA COMPLETA DE NOTIFICACIONES
+// CORREGIDO: Con anticipo solo se envía mensaje al cliente (sin notificar a dueña)
 
 function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cliente }) {
     const [submitting, setSubmitting] = React.useState(false);
@@ -190,7 +190,7 @@ END:VCALENDAR`;
     }
 
     // ============================================
-    // HANDLE SUBMIT (CORREGIDO - CON PUSH SIEMPRE)
+    // HANDLE SUBMIT (CORREGIDO)
     // ============================================
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -233,25 +233,25 @@ END:VCALENDAR`;
                 
                 const nombreNegocio = configNegocio?.nombre || 'Mi Salón';
                 
-                // 🔥 USAR LAS FUNCIONES CENTRALIZADAS DE WHATSAPP-HELPER
+                // 🔥 ENVÍO DE WHATSAPP AL CLIENTE (siempre)
                 if (requiereAnticipo && window.enviarMensajePago) {
                     await window.enviarMensajePago(result.data, configNegocio);
                 } else if (!requiereAnticipo && window.enviarConfirmacionReserva) {
                     await window.enviarConfirmacionReserva(result.data, configNegocio);
                 }
                 
-                if (requiereAnticipo) {
-                    if (window.notificarReservaPendiente) {
-                        await window.notificarReservaPendiente(result.data);
-                    }
-                    console.log('📱 Dueña notificada: RESERVA PENDIENTE DE PAGO (con datos + push)');
-                } else {
+                // 🔥 NOTIFICACIÓN A LA DUEÑA (SOLO si NO requiere anticipo)
+                // Si requiere anticipo, NO se notifica a la dueña (solo el cliente recibe instrucciones de pago)
+                if (!requiereAnticipo) {
                     if (window.notificarNuevaReserva) {
                         await window.notificarNuevaReserva(result.data);
                     }
-                    console.log('📱 Dueña notificada: NUEVO TURNO AGENDADO (con push)');
+                    console.log('📱 Dueña notificada: NUEVA RESERVA (sin anticipo)');
+                } else {
+                    console.log('ℹ️ Reserva con anticipo: solo se envió mensaje al cliente (dueña no notificada)');
                 }
                 
+                // Generar y descargar archivo ICS
                 const icsContent = generarArchivoCalendario(result.data, nombreNegocio);
                 
                 const fechaSegura = result.data.fecha.replace(/-/g, '');

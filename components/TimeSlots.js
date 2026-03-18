@@ -1,4 +1,4 @@
-// components/TimeSlots.js - Versión femenina
+// components/TimeSlots.js - Versión femenina con filtro de horarios permitidos por servicio
 
 function TimeSlots({ service, date, profesional, onTimeSelect, selectedTime }) {
     const [slots, setSlots] = React.useState([]);
@@ -147,9 +147,16 @@ function TimeSlots({ service, date, profesional, onTimeSelect, selectedTime }) {
                     return;
                 }
                 
-                const baseSlots = indicesDelDia.map(indice => indiceToHoraLegible(indice));
+                // Slots base (todos los horarios del profesional para ese día)
+                let baseSlots = indicesDelDia.map(indice => indiceToHoraLegible(indice));
                 
-                console.log(`📋 Slots base para ${diaSemana}:`, baseSlots);
+                // 🔥 FILTRO POR HORARIOS PERMITIDOS DEL SERVICIO (si existen)
+                if (service.horarios_permitidos && service.horarios_permitidos.length > 0) {
+                    baseSlots = baseSlots.filter(slot => service.horarios_permitidos.includes(slot));
+                    console.log(`📋 Slots filtrados por horarios permitidos del servicio:`, baseSlots);
+                }
+                
+                console.log(`📋 Slots base para ${diaSemana} (después de filtro de servicio):`, baseSlots);
                 
                 const todayStr = getCurrentLocalDate();
                 const esHoy = date === todayStr;

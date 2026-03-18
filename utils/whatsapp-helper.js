@@ -1,6 +1,7 @@
 // utils/whatsapp-helper.js - VERSIÓN GENÉRICA COMPLETA
 // CON FORMATO EXACTO DE MENSAJE
 // + Función unificada para confirmación de reserva
+// + Servicio incluido en notificaciones push
 
 console.log('📱 whatsapp-helper.js - VERSIÓN GENÉRICA');
 
@@ -315,9 +316,11 @@ window.notificarNuevaReserva = async function(booking) {
 
         window.enviarWhatsApp(config.telefono, mensajeWhatsApp);
         
+        // 🔥 MODIFICADO: Se agregó el servicio al mensaje push
         const mensajePush = 
 `🆕 NUEVA RESERVA - ${config.nombre}
 👤 Cliente: ${booking.cliente_nombre}
+💅 Servicio: ${booking.servicio}
 📅 Fecha: ${fechaConDia}
 ⏰ Hora: ${horaFormateada}`;
 
@@ -391,7 +394,7 @@ window.notificarReservaPendiente = async function(booking) {
 
 💰 *Para confirmar tu turno*, envía el *anticipo de ${montoAnticipo} CUP* por:
 
-🏦 *Transferencia bancaria:* 
+🏦 *Transferencia bancária:* 
    Tárjeta a transferir : ${configNegocio.cbu || 'XXXX XXXX XXXX XXXX'}
    Alias: ${configNegocio.alias || 'alias.no.configurado'}
 
@@ -405,9 +408,11 @@ El turno se cancelará automáticamente si no se confirma el pago dentro de las 
 
             window.enviarWhatsApp(configNegocio.telefono, mensajeFinal);
             
+            // 🔥 MODIFICADO: Se agregó el servicio al mensaje push
             const mensajePush = 
 `🆕 RESERVA PENDIENTE - ${configNegocio.nombre}
 👤 Cliente: ${booking.cliente_nombre}
+💅 Servicio: ${booking.servicio}
 💰 Monto: $${montoAnticipo}`;
 
             await window.enviarNotificacionPush(
@@ -452,6 +457,7 @@ El turno se cancelará automáticamente si no se confirma el pago dentro de las 
         const mensajePush = 
 `🆕 RESERVA PENDIENTE - ${config.nombre}
 👤 Cliente: ${booking.cliente_nombre}
+💅 Servicio: ${booking.servicio}
 💰 Estado: Pendiente de pago`;
 
         await window.enviarNotificacionPush(
