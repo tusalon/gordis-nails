@@ -1,6 +1,5 @@
-// admin-app.js - Panel de administración (VERSIÓN GENÉRICA)
+// admin-app.js - Panel de administración (VERSIÓN CORREGIDA CON HORARIOS POR DÍA)
 // CON BOTÓN DE NUEVA RESERVA MANUAL, CALENDARIO DE DISPONIBILIDAD
-// SIN DEPENDENCIA DE dias-cerrados.js - OBTIENE DÍAS CERRADOS DIRECTAMENTE DE SUPABASE
 
 console.log('🚀 ADMIN-APP.JS - Panel de administración con Nueva Reserva y Calendario Disponibilidad');
 
@@ -626,7 +625,139 @@ function AdminApp() {
         }
     };
 
-   v
+    const cargarDisponibilidadDelMes = async (fecha, profesionalId = null) => {
+        if (!profesionalId && profesionalesList.length > 0) {
+            profesionalId = profesionalesList[0]?.id;
+        }
+        if (!profesionalId) return;
+        
+        setDisponibilidadCargando(true);
+        try {
+            const year = fecha.getFullYear();
+            const month = fecha.getMonth();
+            
+            const horarios = await window.salonConfig.getHorariosProfesional(profesionalId);
+            const horasTrabajo = horarios.horas || [];
+            const diasTrabajo = horarios.dias || [];
+            const horariosPorDia = horarios.horariosPorDia || {};
+            
+            console.log('=========================================');
+            console.log(`📊 Profesional ID: ${profesionalId}`);
+            console.log(`📊 Horarios por día:`, horariosPorDia);
+            console.log('=========================================');
+            
+            const profesionalObj = profesionalesList.find(p => p.id === profesionalId);
+            const fechasLibresPersonales = profesionalObj?.fechas_libres || [];
+            
+            const primerDia = new Date(year, month, 1);
+            const ultimoDia = new Date(year, month + 1, 0);
+            
+            const fechaInicio = primerDia.toISOString().split('T')[0];
+            const fechaFin = ultimoDia.toISOString().split('T')[0];
+            
+            const response = await fetch(
+                `${window.SUPABASE_URL}/rest/v1/reservas?fecha=gte.${fechaInicio}&fecha=lte.${fechaFin}&profesional_id=eq.${profesionalId}&estado=neq.Cancelado&select=fecha,hora_inicio,hora_fin`,
+                {
+                    headers: {
+                        'apikey': window.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
+                    }
+                }
+            );
+            
+            const reservas = await response.json();
+            
+            const reservasPorFecha = {};
+            (reservas || []).forEach(r => {
+                if (!reservasPorFecha[r.fecha]) {
+                    reservasPorFecha[r.fecha] = [];
+                }
+                reservasPorFecha[r.fecha].push(r);
+            });
+            
+            const disponibilidad = {};
+            const diasEnMes = ultimoDia.getDate();
+            const nombresDias = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+            
+            for (let d = 1; d <= diasEnMes; d++) {
+                const fechaStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
+                
+                if (fechasLibresPersonales.includes(fechaStr)) {
+                    disponibilidad[fechaStr] = false;
+                    continue;
+                }
+                
+                const fechaActual = new Date(year, month, d);
+                const diaSemana = nombresDias[fechaActual.getDay()];
+                
+                const horariosDelDia = horariosPorDia[diaSemana] || [];
+                
+                if (horariosDelDia.length === 0) {
+                    disponibilidad[fechaStr] = false;
+                    continue;
+                }
+                
+                let trabajaEsteDia = true;
+                if (diasTrabajo.length > 0 && !diasTrabajo.includes(diaSemana)) {
+                    trabajaEsteDia = false;
+                }
+                
+                if (!trabajaEsteDia) {
+                    disponibilidad[fechaStr] = false;
+                    continue;
+                }
+                
+                let horariosOcupados = 0;
+                const reservasDia = reservasPorFecha[fechaStr] || [];
+                
+                const hoy = getCurrentLocalDate();
+                if (fechaStr === hoy) {
+                    console.log(`\n📅 Analizando HOY (${fechaStr}) - ${diaSemana}:`);
+                    console.log(`   Horarios del día:`, horariosDelDia.map(i => indiceToHoraLegible(i)));
+                    console.log(`   Reservas del día: ${reservasDia.length}`);
+                }
+                
+                for (const horaIndice of horariosDelDia) {
+                    const slotStr = indiceToHoraLegible(horaIndice);
+                    const [horas, minutos] = slotStr.split(':').map(Number);
+                    const slotStart = horas * 60 + minutos;
+                    const slotEnd = slotStart + 60;
+                    
+                    const tieneConflicto = reservasDia.some(reserva => {
+                        const reservaStart = timeToMinutes(reserva.hora_inicio);
+                        const reservaEnd = timeToMinutes(reserva.hora_fin);
+                        return (slotStart < reservaEnd) && (slotEnd > reservaStart);
+                    });
+                    
+                    if (tieneConflicto) {
+                        horariosOcupados++;
+                        if (fechaStr === hoy) {
+                            console.log(`   ❌ Horario ${slotStr} está OCUPADO`);
+                        }
+                    } else {
+                        if (fechaStr === hoy) {
+                            console.log(`   ✅ Horario ${slotStr} está LIBRE`);
+                        }
+                    }
+                }
+                
+                const tieneDisponibilidad = horariosOcupados < horariosDelDia.length;
+                
+                if (fechaStr === hoy) {
+                    console.log(`   📊 Total horarios del día: ${horariosDelDia.length}, Ocupados: ${horariosOcupados}`);
+                    console.log(`   🟢 Disponible: ${tieneDisponibilidad}\n`);
+                }
+                
+                disponibilidad[fechaStr] = tieneDisponibilidad;
+            }
+            
+            setDisponibilidadDias(disponibilidad);
+        } catch (error) {
+            console.error('Error cargando disponibilidad del mes:', error);
+        } finally {
+            setDisponibilidadCargando(false);
+        }
+    };
 
     // ============================================
     // FUNCIONES DEL CALENDARIO
