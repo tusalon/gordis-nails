@@ -334,7 +334,7 @@ function AdminApp() {
         requiereAnticipo: false
     });
     
-    // 🔥 Estado para el modal de disponibilidad
+    // Estado para el modal de disponibilidad
     const [showDisponibilidadModal, setShowDisponibilidadModal] = React.useState(false);
     const [disponibilidadFecha, setDisponibilidadFecha] = React.useState(new Date());
     const [disponibilidadHoras, setDisponibilidadHoras] = React.useState([]);
@@ -444,7 +444,7 @@ function AdminApp() {
         cargarDatosModal();
     }, []);
 
-    // 🔥 CARGAR DÍAS CERRADOS AL INICIO
+    // CARGAR DÍAS CERRADOS AL INICIO
     React.useEffect(() => {
         cargarDiasCerradosDirecto();
     }, []);
@@ -465,13 +465,16 @@ function AdminApp() {
         cargarDiasLaborales();
     }, [nuevaReservaData.profesional_id]);
 
-    // 🔥 CARGAR DÍAS CERRADOS CUANDO SE ABRE EL MODAL
+    // CARGAR DÍAS CERRADOS CUANDO SE ABRE EL MODAL
     React.useEffect(() => {
         if (showNuevaReservaModal) {
             cargarDiasCerradosDirecto();
         }
     }, [showNuevaReservaModal]);
 
+    // ============================================
+    // FUNCIÓN CORREGIDA PARA CARGAR HORARIOS (CON ZONA HORARIA)
+    // ============================================
     React.useEffect(() => {
         const cargarHorarios = async () => {
             if (!nuevaReservaData.profesional_id || !nuevaReservaData.fecha || !nuevaReservaData.servicio) {
@@ -483,11 +486,54 @@ function AdminApp() {
                 const servicio = serviciosList.find(s => s.nombre === nuevaReservaData.servicio);
                 if (!servicio) return;
 
+                // OBTENER HORARIOS DEL PROFESIONAL
                 const horarios = await window.salonConfig.getHorariosProfesional(nuevaReservaData.profesional_id);
-                const horasTrabajo = horarios.horas || [];
                 
-                const slotsTrabajo = horasTrabajo.map(indice => indiceToHoraLegible(indice));
+                // USAR horariosPorDia en lugar de horas (lista plana)
+                const horariosPorDia = horarios.horariosPorDia || {};
                 
+                // 🔥 CORREGIDO: Forzar fecha en hora local (sin UTC)
+                const partes = nuevaReservaData.fecha.split('-');
+                const año = parseInt(partes[0]);
+                const mes = parseInt(partes[1]) - 1;
+                const día = parseInt(partes[2]);
+                const fechaSeleccionada = new Date(año, mes, día);
+                
+                const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+                let diaSemana = diasSemana[fechaSeleccionada.getDay()];
+                
+                // Normalizar: eliminar acentos para comparar con la BD
+                const normalizarDia = (dia) => {
+                    return dia.toLowerCase()
+                        .replace(/á/g, 'a')
+                        .replace(/é/g, 'e')
+                        .replace(/í/g, 'i')
+                        .replace(/ó/g, 'o')
+                        .replace(/ú/g, 'u')
+                        .replace(/ñ/g, 'n');
+                };
+                
+                diaSemana = normalizarDia(diaSemana);
+                
+                console.log(`📅 Fecha: ${nuevaReservaData.fecha}`);
+                console.log(`📅 Día normalizado: ${diaSemana}`);
+                console.log(`📋 Horarios configurados para este día:`, horariosPorDia[diaSemana] || []);
+                
+                // Obtener los índices de horario para el día específico
+                const indicesDelDia = horariosPorDia[diaSemana] || [];
+                
+                if (indicesDelDia.length === 0) {
+                    console.log(`⚠️ No hay horarios configurados para ${diaSemana}`);
+                    setHorariosDisponibles([]);
+                    return;
+                }
+                
+                // Convertir índices a horas legibles
+                const slotsTrabajo = indicesDelDia.map(indice => indiceToHoraLegible(indice));
+                
+                console.log(`📋 Slots base para ${diaSemana}:`, slotsTrabajo);
+                
+                // Obtener reservas existentes
                 const response = await fetch(
                     `${window.SUPABASE_URL}/rest/v1/reservas?fecha=eq.${nuevaReservaData.fecha}&profesional_id=eq.${nuevaReservaData.profesional_id}&estado=neq.Cancelado&select=hora_inicio,hora_fin`,
                     {
@@ -509,6 +555,7 @@ function AdminApp() {
                 const hoy = getCurrentLocalDate();
                 const esHoy = nuevaReservaData.fecha === hoy;
 
+                // Filtrar horarios disponibles
                 const disponibles = slotsTrabajo.filter(slot => {
                     const [horas, minutos] = slot.split(':').map(Number);
                     const slotStart = horas * 60 + minutos;
@@ -533,6 +580,7 @@ function AdminApp() {
                     return (hA * 60 + mA) - (hB * 60 + mB);
                 });
 
+                console.log(`🎯 Horarios disponibles para ${diaSemana}:`, disponibles);
                 setHorariosDisponibles(disponibles);
 
             } catch (error) {
@@ -809,7 +857,11 @@ function AdminApp() {
             return false;
         }
         
-        const diaSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][date.getDay()];
+        // 🔥 CORREGIDO: Usar fecha local para el día de semana
+        const fechaLocal = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+        const diaSemana = diasSemana[fechaLocal.getDay()];
+        
         if (diasLaborales.length > 0 && !diasLaborales.includes(diaSemana)) {
             return false;
         }
@@ -1306,7 +1358,6 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                        {/* 🔥 BOTÓN NUEVA RESERVA */}
                         <button
                             onClick={abrirModalNuevaReserva}
                             className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 shadow-md border border-green-400 flex-1 sm:flex-none justify-center"
@@ -1315,7 +1366,6 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                             <span className="font-medium">Nueva Reserva</span>
                         </button>
 
-                        {/* 🔥 BOTÓN CALENDARIO DE DISPONIBILIDAD */}
                         <button
                             onClick={abrirModalDisponibilidad}
                             className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 shadow-md border border-blue-400 flex-1 sm:flex-none justify-center"
@@ -1373,7 +1423,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Cliente *</label>
-                                    <input type="text" value={nuevaReservaData.cliente_nombre} onChange={(e) => setNuevaReservaData({...nuevaReservaData, cliente_nombre: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Juan Pérez" />
+                                    <input type="text" value={nuevaReservaData.cliente_nombre} onChange={(e) => setNuevaReservaData({...nuevaReservaData, cliente_nombre: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: María Pérez" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp del Cliente *</label>
@@ -1636,7 +1686,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                                             <div className="text-sm space-y-1">
                                                 <p><span className="font-medium">👤 Cliente:</span> {b.cliente_nombre}</p>
                                                 <p><span className="font-medium">📱 WhatsApp:</span> {b.cliente_whatsapp}</p>
-                                                <p><span className="font-medium">💈 Servicio:</span> {b.servicio}</p>
+                                                <p><span className="font-medium">💅 Servicio:</span> {b.servicio}</p>
                                                 <p><span className="font-medium">👩‍🎨 Profesional:</span> {b.profesional_nombre || b.trabajador_nombre}</p>
                                             </div>
                                             <div className="flex justify-between items-center mt-3 pt-2 border-t">
