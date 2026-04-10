@@ -1,18 +1,13 @@
-﻿// admin-app.js - Panel de administración (VERSIÓN COMPLETA CON CALENDARIO)
+﻿// admin-app.js - Panel de administración (VERSIÓN OPTIMIZADA CON VALIDACIÓN DE DISPONIBILIDAD)
 // CON BOTÓN DE NUEVA RESERVA MANUAL, CALENDARIO DE DISPONIBILIDAD Y VISTA CALENDARIO
 
-console.log('🚀 ADMIN-APP.JS - Panel de administración con Nueva Reserva, Calendario Disponibilidad y Vista Calendario');
+console.log('🚀 ADMIN-APP.JS - Panel optimizado con validación de disponibilidad');
 
 window.addEventListener('error', function(e) {
-    console.error('❌ Error detectado, posible versión antigua:', e.message);
-    
+    console.error('❌ Error detectado:', e.message);
     if (e.message.includes('Failed to load') || e.message.includes('Unexpected token')) {
-        console.log('🔄 Forzando recarga por posible versión antigua...');
-        
         if (window.swRegistration) {
-            window.swRegistration.unregister().then(() => {
-                window.location.reload();
-            });
+            window.swRegistration.unregister().then(() => window.location.reload());
         } else {
             window.location.reload();
         }
@@ -24,65 +19,33 @@ window.addEventListener('error', function(e) {
 // ============================================
 function getNegocioId() {
     const localId = localStorage.getItem('negocioId');
-    if (localId) {
-        console.log('📌 AdminApp usando negocioId de localStorage:', localId);
-        return localId;
-    }
-    
-    if (window.NEGOCIO_ID_POR_DEFECTO) {
-        console.log('📌 AdminApp usando NEGOCIO_ID_POR_DEFECTO:', window.NEGOCIO_ID_POR_DEFECTO);
-        return window.NEGOCIO_ID_POR_DEFECTO;
-    }
-    
-    if (typeof window.getNegocioId === 'function') {
-        const id = window.getNegocioId();
-        console.log('📌 AdminApp usando window.getNegocioId():', id);
-        return id;
-    }
-    
-    console.error('❌ No se pudo obtener negocioId');
+    if (localId) return localId;
+    if (window.NEGOCIO_ID_POR_DEFECTO) return window.NEGOCIO_ID_POR_DEFECTO;
+    if (typeof window.getNegocioId === 'function') return window.getNegocioId();
     return null;
 }
 
 // ============================================
 // FUNCIONES DE SUPABASE
 // ============================================
-
 async function getAllBookings() {
     try {
         const negocioId = getNegocioId();
-        console.log('🔍 getAllBookings - negocioId:', negocioId);
+        if (!negocioId) return [];
         
-        if (!negocioId) {
-            console.error('❌ No hay negocioId disponible');
-            return [];
-        }
-        
-        console.log('📋 Obteniendo reservas para negocio:', negocioId);
-        
-        const url = `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&select=*&order=fecha.desc,hora_inicio.asc`;
-        console.log('🔗 URL de consulta:', url);
-        
+        const url = `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&select=*&order=fecha.asc,hora_inicio.asc`;
         const res = await fetch(url, {
             headers: {
                 'apikey': window.SUPABASE_ANON_KEY,
                 'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
             }
         });
-        
-        console.log('📡 Status de respuesta:', res.status);
-        
-        if (!res.ok) {
-            const errorText = await res.text();
-            console.error('❌ Error en respuesta:', errorText);
-            return [];
-        }
-        
+        if (!res.ok) return [];
         const data = await res.json();
         console.log('✅ Reservas obtenidas:', data.length);
         return Array.isArray(data) ? data : [];
     } catch (error) {
-        console.error('❌ Error fetching bookings:', error);
+        console.error('Error fetching bookings:', error);
         return [];
     }
 }
@@ -90,13 +53,6 @@ async function getAllBookings() {
 async function cancelBooking(id) {
     try {
         const negocioId = getNegocioId();
-        if (!negocioId) {
-            console.error('❌ No hay negocioId disponible');
-            return false;
-        }
-        
-        console.log(`🗑️ Cancelando reserva ${id} para negocio:`, negocioId);
-        
         const res = await fetch(
             `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&id=eq.${id}`,
             {
@@ -109,13 +65,7 @@ async function cancelBooking(id) {
                 body: JSON.stringify({ estado: 'Cancelado' })
             }
         );
-        
-        if (!res.ok) {
-            console.error('Error al cancelar:', await res.text());
-            return false;
-        }
-        
-        return true;
+        return res.ok;
     } catch (error) {
         console.error('Error cancel booking:', error);
         return false;
@@ -125,42 +75,21 @@ async function cancelBooking(id) {
 async function createBooking(bookingData) {
     try {
         const negocioId = getNegocioId();
-        if (!negocioId) {
-            console.error('❌ No hay negocioId disponible');
-            return { success: false, error: 'No hay negocioId' };
-        }
-        
-        const dataWithNegocio = {
-            ...bookingData,
-            negocio_id: negocioId
-        };
-        
-        console.log('📤 Creando reserva para negocio:', negocioId, dataWithNegocio);
-        
-        const res = await fetch(
-            `${window.SUPABASE_URL}/rest/v1/reservas`,
-            {
-                method: 'POST',
-                headers: {
-                    'apikey': window.SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`,
-                    'Content-Type': 'application/json',
-                    'Prefer': 'return=representation'
-                },
-                body: JSON.stringify(dataWithNegocio)
-            }
-        );
-        
-        if (!res.ok) {
-            const error = await res.text();
-            console.error('Error al crear reserva:', error);
-            return { success: false, error };
-        }
-        
+        const dataWithNegocio = { ...bookingData, negocio_id: negocioId };
+        const res = await fetch(`${window.SUPABASE_URL}/rest/v1/reservas`, {
+            method: 'POST',
+            headers: {
+                'apikey': window.SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=representation'
+            },
+            body: JSON.stringify(dataWithNegocio)
+        });
+        if (!res.ok) return { success: false, error: await res.text() };
         const data = await res.json();
         return { success: true, data: Array.isArray(data) ? data[0] : data };
     } catch (error) {
-        console.error('Error creating booking:', error);
         return { success: false, error: error.message };
     }
 }
@@ -171,90 +100,37 @@ async function createBooking(bookingData) {
 async function marcarTurnosCompletados() {
     try {
         const negocioId = getNegocioId();
-        if (!negocioId) {
-            console.error('❌ No hay negocioId disponible');
-            return;
-        }
-        
+        if (!negocioId) return;
         const ahora = new Date();
-        const año = ahora.getFullYear();
-        const mes = (ahora.getMonth() + 1).toString().padStart(2, '0');
-        const dia = ahora.getDate().toString().padStart(2, '0');
-        const hoy = `${año}-${mes}-${dia}`;
-        
+        const hoy = `${ahora.getFullYear()}-${(ahora.getMonth()+1).toString().padStart(2,'0')}-${ahora.getDate().toString().padStart(2,'0')}`;
         const horaActual = ahora.getHours();
         const minutosActuales = ahora.getMinutes();
         const totalMinutosActual = horaActual * 60 + minutosActuales;
-        
-        console.log('⏰ Verificando turnos para marcar como completados...');
-        console.log('📅 Fecha LOCAL actual:', hoy);
-        console.log('🕐 Hora LOCAL actual:', `${horaActual}:${minutosActuales}`);
-        
+
         const responsePasados = await fetch(
-            `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&estado=eq.Reservado&fecha=lt.${hoy}&select=id,fecha,hora_inicio,hora_fin,cliente_nombre,servicio,profesional_nombre`,
-            {
-                headers: {
-                    'apikey': window.SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
-                }
-            }
+            `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&estado=eq.Reservado&fecha=lt.${hoy}`,
+            { headers: { 'apikey': window.SUPABASE_ANON_KEY, 'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}` } }
         );
-        
-        if (!responsePasados.ok) {
-            console.error('Error al buscar turnos pasados para completar');
-            return;
-        }
-        
         const turnosPasados = await responsePasados.json();
-        
+
         const responseHoy = await fetch(
-            `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&estado=eq.Reservado&fecha=eq.${hoy}&select=id,fecha,hora_inicio,hora_fin,cliente_nombre,servicio,profesional_nombre`,
-            {
-                headers: {
-                    'apikey': window.SUPABASE_ANON_KEY,
-                    'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
-                }
-            }
+            `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&estado=eq.Reservado&fecha=eq.${hoy}`,
+            { headers: { 'apikey': window.SUPABASE_ANON_KEY, 'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}` } }
         );
-        
         const turnosHoy = responseHoy.ok ? await responseHoy.json() : [];
-        
         const turnosHoyTerminados = turnosHoy.filter(turno => {
             const [horas, minutos] = turno.hora_fin.split(':').map(Number);
-            const totalMinutosFin = horas * 60 + minutos;
-            return totalMinutosFin <= totalMinutosActual;
+            return (horas * 60 + minutos) <= totalMinutosActual;
         });
-        
-        console.log(`📊 Turnos de días pasados (fecha < ${hoy}): ${turnosPasados.length}`);
-        console.log(`📊 Turnos de hoy terminados: ${turnosHoyTerminados.length}`);
-        
         const turnosACompletar = [...turnosPasados, ...turnosHoyTerminados];
         
-        if (turnosACompletar.length > 0) {
-            console.log(`✅ ${turnosACompletar.length} turnos a marcar como completados`);
-            
-            for (const turno of turnosACompletar) {
-                console.log(`📝 Completando turno de ${turno.cliente_nombre} - ${turno.fecha} ${turno.hora_inicio} a ${turno.hora_fin}`);
-                
-                await fetch(
-                    `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&id=eq.${turno.id}`,
-                    {
-                        method: 'PATCH',
-                        headers: {
-                            'apikey': window.SUPABASE_ANON_KEY,
-                            'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ estado: 'Completado' })
-                    }
-                );
-            }
-            
-            console.log(`✅ ${turnosACompletar.length} turnos marcados como completados`);
-        } else {
-            console.log('⏰ No hay turnos para completar');
+        for (const turno of turnosACompletar) {
+            await fetch(`${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&id=eq.${turno.id}`, {
+                method: 'PATCH',
+                headers: { 'apikey': window.SUPABASE_ANON_KEY, 'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ estado: 'Completado' })
+            });
         }
-        
     } catch (error) {
         console.error('Error marcando turnos completados:', error);
     }
@@ -263,52 +139,43 @@ async function marcarTurnosCompletados() {
 // ============================================
 // FUNCIONES AUXILIARES
 // ============================================
-const timeToMinutes = (time) => {
-    const [hours, minutes] = time.split(':').map(Number);
-    return hours * 60 + minutes;
-};
-
-const formatTo12Hour = (time) => {
-    const [hours, minutes] = time.split(':');
-    const h = parseInt(hours);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const h12 = h % 12 || 12;
-    return `${h12}:${minutes} ${ampm}`;
-};
-
-const calculateEndTime = (startTime, duration) => {
-    const [hours, minutes] = startTime.split(':').map(Number);
-    const totalMinutes = hours * 60 + minutes + duration;
-    const endHours = Math.floor(totalMinutes / 60);
-    const endMinutes = totalMinutes % 60;
-    return `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
-};
-
-const getCurrentLocalDate = () => {
-    const ahora = new Date();
-    const year = ahora.getFullYear();
-    const month = (ahora.getMonth() + 1).toString().padStart(2, '0');
-    const day = ahora.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
-
-const indiceToHoraLegible = (indice) => {
-    const horas = Math.floor(indice / 2);
-    const minutos = indice % 2 === 0 ? '00' : '30';
-    return `${horas.toString().padStart(2, '0')}:${minutos}`;
-};
+const timeToMinutes = (time) => { const [h,m] = time.split(':').map(Number); return h*60+m; };
+const formatTo12Hour = (time) => { const [h,m] = time.split(':'); const hour = parseInt(h); const ampm = hour>=12?'PM':'AM'; const h12 = hour%12||12; return `${h12}:${m} ${ampm}`; };
+const calculateEndTime = (startTime, duration) => { const [h,m] = startTime.split(':').map(Number); const total = h*60+m+duration; return `${Math.floor(total/60).toString().padStart(2,'0')}:${(total%60).toString().padStart(2,'0')}`; };
+const getCurrentLocalDate = () => { const ahora = new Date(); return `${ahora.getFullYear()}-${(ahora.getMonth()+1).toString().padStart(2,'0')}-${ahora.getDate().toString().padStart(2,'0')}`; };
+const indiceToHoraLegible = (indice) => { const horas = Math.floor(indice/2); const minutos = indice%2===0?'00':'30'; return `${horas.toString().padStart(2,'0')}:${minutos}`; };
 
 // ============================================
-// COMPONENTE AdminCalendar (Vista Calendario con FullCalendar)
+// COMPONENTE AdminCalendar (VERSIÓN OPTIMIZADA CON VALIDACIÓN)
 // ============================================
-function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
+function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, onCreateBookingFromSlot, profesionalesList }) {
     const calendarRef = React.useRef(null);
     const [calendar, setCalendar] = React.useState(null);
+    const [horariosOcupados, setHorariosOcupados] = React.useState({});
 
+    // Función para verificar si un horario está ocupado
+    const verificarHorarioOcupado = (fecha, horaInicio, profesionalId) => {
+        const key = `${fecha}_${horaInicio}_${profesionalId}`;
+        return horariosOcupados[key] || false;
+    };
+
+    // Actualizar mapa de horarios ocupados
+    React.useEffect(() => {
+        const ocupados = {};
+        bookings.forEach(booking => {
+            if (booking.estado !== 'Cancelado' && booking.estado !== 'Completado') {
+                const key = `${booking.fecha}_${booking.hora_inicio}_${booking.profesional_id}`;
+                ocupados[key] = true;
+            }
+        });
+        setHorariosOcupados(ocupados);
+    }, [bookings]);
+
+    // Inicializar calendario optimizado
     React.useEffect(() => {
         if (!calendarRef.current || calendar) return;
         
-        console.log('📅 Inicializando calendario...');
+        console.log('📅 Inicializando calendario optimizado...');
         
         const cal = new FullCalendar.Calendar(calendarRef.current, {
             locale: 'es',
@@ -320,12 +187,33 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
             },
             editable: false,
             eventClick: (info) => {
-                console.log('📅 Click en evento:', info.event.id);
                 onEventClick(info.event);
             },
-            dateClick: (info) => {
-                console.log('📅 Click en fecha:', info.dateStr);
-                onDateSelect(info.dateStr);
+            dateClick: async (info) => {
+                // Validar si la fecha ya pasó
+                const fechaStr = info.dateStr.split('T')[0];
+                const hoy = getCurrentLocalDate();
+                if (fechaStr < hoy) {
+                    alert('❌ No se pueden crear reservas en fechas pasadas');
+                    return;
+                }
+                
+                // Verificar si hay algún profesional disponible
+                if (!profesionalesList || profesionalesList.length === 0) {
+                    alert('❌ No hay profesionales disponibles');
+                    return;
+                }
+                
+                // Abrir modal para crear reserva
+                if (onCreateBookingFromSlot) {
+                    onCreateBookingFromSlot({
+                        fecha: fechaStr,
+                        hora_inicio: info.dateStr.split('T')[1]?.substring(0, 5) || '09:00',
+                        profesional_id: profesionalesList[0]?.id
+                    });
+                } else {
+                    onDateSelect(info.dateStr);
+                }
             },
             height: 'auto',
             slotMinTime: '08:00:00',
@@ -333,7 +221,15 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
             allDaySlot: false,
             nowIndicator: true,
             slotDuration: '00:30:00',
-            slotLabelInterval: '01:00'
+            slotLabelInterval: '01:00',
+            lazyFetching: true,
+            eventLimit: true,
+            dayMaxEvents: 3,
+            views: {
+                timeGrid: {
+                    eventLimit: 3
+                }
+            }
         });
         
         cal.render();
@@ -344,23 +240,25 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
         };
     }, []);
 
+    // Actualizar eventos de forma optimizada
     React.useEffect(() => {
         if (!calendar) return;
         
-        console.log('🔄 Actualizando calendario - Reservas totales:', bookings.length);
+        console.log('🔄 Actualizando calendario - Reservas:', bookings.length);
         
         const reservasActivas = bookings.filter(b => 
             b.estado === 'Reservado' || b.estado === 'Pendiente'
         );
         
-        console.log('📅 Reservas activas:', reservasActivas.length);
-        
         const events = reservasActivas.map(booking => {
-            const backgroundColor = booking.estado === 'Pendiente' ? '#F59E0B' : '#10B981';
+            let backgroundColor = '#10B981';
+            if (booking.estado === 'Pendiente') backgroundColor = '#F59E0B';
+            
+            const profesional = booking.profesional_nombre || booking.trabajador_nombre || 'No asignado';
             
             return {
                 id: String(booking.id),
-                title: `${booking.servicio} - ${booking.cliente_nombre}`,
+                title: `${booking.servicio} - ${booking.cliente_nombre} (${profesional})`,
                 start: `${booking.fecha}T${booking.hora_inicio}`,
                 end: `${booking.fecha}T${booking.hora_fin}`,
                 backgroundColor: backgroundColor,
@@ -369,19 +267,19 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
                     cliente_nombre: booking.cliente_nombre,
                     cliente_whatsapp: booking.cliente_whatsapp,
                     servicio: booking.servicio,
-                    profesional_nombre: booking.profesional_nombre || booking.trabajador_nombre,
+                    profesional_nombre: profesional,
+                    profesional_id: booking.profesional_id,
                     estado: booking.estado,
-                    duracion: booking.duracion,
                     fecha: booking.fecha,
                     hora_inicio: booking.hora_inicio,
                     hora_fin: booking.hora_fin,
-                    id: booking.id
+                    id: booking.id,
+                    ocupado: true
                 }
             };
         });
         
-        console.log('📅 Eventos generados:', events.length);
-        
+        // Limpiar y agregar eventos de forma eficiente
         calendar.removeAllEvents();
         if (events.length > 0) {
             calendar.addEventSource(events);
@@ -400,12 +298,21 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
 
     return (
         <div className="bg-white rounded-xl shadow-sm p-2 animate-fade-in">
-            <div ref={calendarRef}></div>
-            {bookings.filter(b => b.estado === 'Reservado' || b.estado === 'Pendiente').length === 0 && (
-                <div className="text-center py-4 text-gray-400 text-sm border-t mt-2">
-                    No hay turnos activos para mostrar
+            <div className="text-xs text-gray-400 text-center mb-2 flex justify-center gap-4">
+                <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span>Reservado</span>
                 </div>
-            )}
+                <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                    <span>Pendiente</span>
+                </div>
+                <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-gray-300"></div>
+                    <span>Horario Libre</span>
+                </div>
+            </div>
+            <div ref={calendarRef}></div>
         </div>
     );
 }
@@ -438,9 +345,7 @@ function ListaDeReservas({ bookings, loading, filterDate, setFilterDate, statusF
                     <button onClick={() => setStatusFilter('completadas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'completadas' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Completadas ({completadasCount})</button>
                     <button onClick={() => setStatusFilter('canceladas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'canceladas' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Canceladas ({canceladasCount})</button>
                     <button onClick={() => setStatusFilter('todas')} className={`px-4 py-2 rounded-lg text-sm font-medium ${statusFilter === 'todas' ? 'bg-pink-500 text-white' : 'bg-gray-100 text-gray-700'}`}>Todas ({bookings.length})</button>
-                    {statusFilter === 'canceladas' && (
-                        <button onClick={borrarCanceladas} className="px-4 py-2 bg-red-700 text-white rounded-lg text-sm">🗑️ Borrar todas</button>
-                    )}
+                    {statusFilter === 'canceladas' && <button onClick={borrarCanceladas} className="px-4 py-2 bg-red-700 text-white rounded-lg text-sm">🗑️ Borrar todas</button>}
                 </div>
             </div>
 
@@ -506,7 +411,7 @@ function AdminApp() {
     
     const [tabActivo, setTabActivo] = React.useState('reservas');
     
-    // NUEVO: Estado para cambiar entre vista calendario y lista
+    // Estado para cambiar entre vista calendario y lista
     const [vistaReservas, setVistaReservas] = React.useState('calendario');
     
     const [showClientesRegistrados, setShowClientesRegistrados] = React.useState(false);
@@ -677,13 +582,9 @@ function AdminApp() {
                 const servicio = serviciosList.find(s => s.nombre === nuevaReservaData.servicio);
                 if (!servicio) return;
 
-                // OBTENER HORARIOS DEL PROFESIONAL
                 const horarios = await window.salonConfig.getHorariosProfesional(nuevaReservaData.profesional_id);
-                
-                // USAR horariosPorDia en lugar de horas (lista plana)
                 const horariosPorDia = horarios.horariosPorDia || {};
                 
-                // 🔥 CORREGIDO: Forzar fecha en hora local (sin UTC)
                 const partes = nuevaReservaData.fecha.split('-');
                 const año = parseInt(partes[0]);
                 const mes = parseInt(partes[1]) - 1;
@@ -693,7 +594,6 @@ function AdminApp() {
                 const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
                 let diaSemana = diasSemana[fechaSeleccionada.getDay()];
                 
-                // Normalizar: eliminar acentos para comparar con la BD
                 const normalizarDia = (dia) => {
                     return dia.toLowerCase()
                         .replace(/á/g, 'a')
@@ -705,26 +605,15 @@ function AdminApp() {
                 };
                 
                 diaSemana = normalizarDia(diaSemana);
-                
-                console.log(`📅 Fecha: ${nuevaReservaData.fecha}`);
-                console.log(`📅 Día normalizado: ${diaSemana}`);
-                console.log(`📋 Horarios configurados para este día:`, horariosPorDia[diaSemana] || []);
-                
-                // Obtener los índices de horario para el día específico
                 const indicesDelDia = horariosPorDia[diaSemana] || [];
                 
                 if (indicesDelDia.length === 0) {
-                    console.log(`⚠️ No hay horarios configurados para ${diaSemana}`);
                     setHorariosDisponibles([]);
                     return;
                 }
                 
-                // Convertir índices a horas legibles
                 const slotsTrabajo = indicesDelDia.map(indice => indiceToHoraLegible(indice));
                 
-                console.log(`📋 Slots base para ${diaSemana}:`, slotsTrabajo);
-                
-                // Obtener reservas existentes
                 const response = await fetch(
                     `${window.SUPABASE_URL}/rest/v1/reservas?fecha=eq.${nuevaReservaData.fecha}&profesional_id=eq.${nuevaReservaData.profesional_id}&estado=neq.Cancelado&select=hora_inicio,hora_fin`,
                     {
@@ -746,7 +635,6 @@ function AdminApp() {
                 const hoy = getCurrentLocalDate();
                 const esHoy = nuevaReservaData.fecha === hoy;
 
-                // Filtrar horarios disponibles
                 const disponibles = slotsTrabajo.filter(slot => {
                     const [horas, minutos] = slot.split(':').map(Number);
                     const slotStart = horas * 60 + minutos;
@@ -771,7 +659,6 @@ function AdminApp() {
                     return (hA * 60 + mA) - (hB * 60 + mB);
                 });
 
-                console.log(`🎯 Horarios disponibles para ${diaSemana}:`, disponibles);
                 setHorariosDisponibles(disponibles);
 
             } catch (error) {
@@ -879,11 +766,6 @@ function AdminApp() {
             const horasTrabajo = horarios.horas || [];
             const diasTrabajo = horarios.dias || [];
             const horariosPorDia = horarios.horariosPorDia || {};
-            
-            console.log('=========================================');
-            console.log(`📊 Profesional ID: ${profesionalId}`);
-            console.log(`📊 Horarios por día:`, horariosPorDia);
-            console.log('=========================================');
             
             const profesionalObj = profesionalesList.find(p => p.id === profesionalId);
             const fechasLibresPersonales = profesionalObj?.fechas_libres || [];
@@ -1048,7 +930,6 @@ function AdminApp() {
             return false;
         }
         
-        // 🔥 CORREGIDO: Usar fecha local para el día de semana
         const fechaLocal = new Date(date.getFullYear(), date.getMonth(), date.getDate());
         const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
         const diaSemana = diasSemana[fechaLocal.getDay()];
@@ -1449,7 +1330,31 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
     };
 
     const handleCalendarDateSelect = (dateStr) => {
-        setNuevaReservaData({ ...nuevaReservaData, fecha: dateStr.split('T')[0] });
+        const fechaSeleccionada = dateStr.split('T')[0];
+        const hoy = getCurrentLocalDate();
+        
+        if (fechaSeleccionada < hoy) {
+            alert('❌ No se pueden crear reservas en fechas pasadas');
+            return;
+        }
+        
+        setNuevaReservaData({ ...nuevaReservaData, fecha: fechaSeleccionada });
+        setShowNuevaReservaModal(true);
+    };
+    
+    const handleCreateBookingFromSlot = (slotData) => {
+        const hoy = getCurrentLocalDate();
+        if (slotData.fecha < hoy) {
+            alert('❌ No se pueden crear reservas en fechas pasadas');
+            return;
+        }
+        
+        setNuevaReservaData({
+            ...nuevaReservaData,
+            fecha: slotData.fecha,
+            hora_inicio: slotData.hora_inicio,
+            profesional_id: slotData.profesional_id
+        });
         setShowNuevaReservaModal(true);
     };
 
@@ -1870,7 +1775,9 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                                 bookings={bookings} 
                                 loading={loading} 
                                 onEventClick={handleCalendarEventClick} 
-                                onDateSelect={handleCalendarDateSelect} 
+                                onDateSelect={handleCalendarDateSelect}
+                                onCreateBookingFromSlot={handleCreateBookingFromSlot}
+                                profesionalesList={profesionalesList}
                             />
                         ) : (
                             <ListaDeReservas 
