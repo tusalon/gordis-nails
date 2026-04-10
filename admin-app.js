@@ -1,7 +1,7 @@
-// admin-app.js - Panel de administración (VERSIÓN CON CALENDARIO + LISTA)
-// CON BOTÓN DE NUEVA RESERVA MANUAL, CALENDARIO DE DISPONIBILIDAD
+// admin-app.js - Panel de administración (VERSIÓN CORREGIDA CON HORARIOS POR DÍA)
+// CON BOTÓN DE NUEVA RESERVA MANUAL, CALENDARIO DE DISPONIBILIDAD Y VISTA CALENDARIO
 
-console.log('🚀 ADMIN-APP.JS - Panel de administración con Nueva Reserva, Calendario Disponibilidad y Vista Calendario');
+console.log('🚀 ADMIN-APP.JS - Panel de administración con Nueva Reserva, Calendario Disponibilidad y Vista Calendario (08:00-16:00)');
 
 window.addEventListener('error', function(e) {
     console.error('❌ Error detectado, posible versión antigua:', e.message);
@@ -299,15 +299,26 @@ const indiceToHoraLegible = (indice) => {
 };
 
 // ============================================
-// COMPONENTE AdminCalendar (Vista Calendario con FullCalendar)
+// COMPONENTE AdminCalendar (Vista Calendario con FullCalendar - VERSIÓN ROBUSTA)
 // ============================================
 function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
     const calendarRef = React.useRef(null);
     const calendarApiRef = React.useRef(null);
+    const [calendarKey, setCalendarKey] = React.useState(0);
 
     // Inicializar calendario UNA SOLA VEZ
     React.useEffect(() => {
-        if (!calendarRef.current || calendarApiRef.current) return;
+        if (!calendarRef.current) return;
+        
+        // Destruir calendario anterior si existe
+        if (calendarApiRef.current) {
+            try {
+                calendarApiRef.current.destroy();
+            } catch(e) { console.warn('Error destruyendo calendario:', e); }
+            calendarApiRef.current = null;
+        }
+        
+        console.log('📅 Inicializando calendario con horario 08:00-16:00...');
         
         const calendar = new FullCalendar.Calendar(calendarRef.current, {
             locale: 'es',
@@ -319,14 +330,31 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
             },
             editable: false,
             droppable: false,
-            eventClick: (info) => onEventClick(info.event),
-            dateClick: (info) => onDateSelect(info.dateStr),
+            eventClick: (info) => {
+                console.log('📅 Click en evento:', info.event.id);
+                onEventClick(info.event);
+            },
+            dateClick: (info) => {
+                console.log('📅 Click en fecha:', info.dateStr);
+                onDateSelect(info.dateStr);
+            },
             height: 'auto',
             slotMinTime: '08:00:00',
-            slotMaxTime: '21:00:00',
+            slotMaxTime: '16:00:00',
             allDaySlot: false,
             nowIndicator: true,
-            businessHours: { daysOfWeek: [1,2,3,4,5,6], startTime: '09:00', endTime: '20:00' }
+            slotDuration: '00:30:00',
+            slotLabelInterval: '01:00',
+            businessHours: { 
+                daysOfWeek: [1,2,3,4,5,6], 
+                startTime: '08:00', 
+                endTime: '16:00' 
+            },
+            eventTimeFormat: {
+                hour: 'numeric',
+                minute: '2-digit',
+                meridiem: 'short'
+            }
         });
         
         calendar.render();
@@ -334,24 +362,28 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
         
         return () => {
             if (calendarApiRef.current) {
-                calendarApiRef.current.destroy();
+                try {
+                    calendarApiRef.current.destroy();
+                } catch(e) {}
                 calendarApiRef.current = null;
             }
         };
-    }, []);
+    }, [calendarKey]);
 
     // Actualizar eventos cuando cambian las reservas
     React.useEffect(() => {
-        if (!calendarApiRef.current) return;
+        if (!calendarApiRef.current) {
+            setCalendarKey(prev => prev + 1);
+            return;
+        }
         
         console.log('🔄 Actualizando calendario con', bookings.length, 'reservas');
         
         const events = bookings
-            .filter(b => b.estado !== 'Cancelado')
+            .filter(b => b.estado !== 'Cancelado' && b.estado !== 'Completado')
             .map(booking => {
-                let backgroundColor = '#10B981'; // Verde
-                if (booking.estado === 'Pendiente') backgroundColor = '#F59E0B'; // Ámbar
-                if (booking.estado === 'Completado') backgroundColor = '#6B7280'; // Gris
+                let backgroundColor = '#10B981';
+                if (booking.estado === 'Pendiente') backgroundColor = '#F59E0B';
                 
                 const profesional = booking.profesional_nombre || booking.trabajador_nombre || 'No asignado';
                 const start = `${booking.fecha}T${booking.hora_inicio}`;
@@ -359,7 +391,7 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
                 
                 return {
                     id: String(booking.id),
-                    title: `${formatTo12Hour(booking.hora_inicio)} - ${booking.servicio} - ${booking.cliente_nombre} (${profesional})`,
+                    title: `${formatTo12Hour(booking.hora_inicio)} - ${booking.servicio} - ${booking.cliente_nombre}`,
                     start: start,
                     end: end,
                     backgroundColor: backgroundColor,
@@ -379,10 +411,15 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
                 };
             });
         
-        console.log('📅 Eventos procesados:', events.length);
+        console.log('📅 Eventos generados:', events.length);
         
-        calendarApiRef.current.removeAllEvents();
-        calendarApiRef.current.addEventSource(events);
+        try {
+            calendarApiRef.current.removeAllEvents();
+            calendarApiRef.current.addEventSource(events);
+        } catch(e) {
+            console.error('Error actualizando eventos:', e);
+            setCalendarKey(prev => prev + 1);
+        }
         
     }, [bookings]);
 
@@ -395,7 +432,7 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
         );
     }
 
-    return <div className="bg-white rounded-xl shadow-sm p-4 animate-fade-in" ref={calendarRef}></div>;
+    return <div className="bg-white rounded-xl shadow-sm p-2 animate-fade-in" ref={calendarRef}></div>;
 }
 
 // ============================================
@@ -475,16 +512,13 @@ function ListaDeReservas({ bookings, loading, filterDate, setFilterDate, statusF
 }
 
 // ============================================
-// COMPONENTE PRINCIPAL
+// COMPONENTE PRINCIPAL AdminApp
 // ============================================
 function AdminApp() {
     const [bookings, setBookings] = React.useState([]);
     const [loading, setLoading] = React.useState(true);
     const [filterDate, setFilterDate] = React.useState('');
     const [statusFilter, setStatusFilter] = React.useState('activas');
-    
-    // NUEVO: Estado para cambiar entre vista calendario y lista
-    const [vistaReservas, setVistaReservas] = React.useState('calendario');
     
     const [userRole, setUserRole] = React.useState('admin');
     const [userNivel, setUserNivel] = React.useState(3);
@@ -528,6 +562,9 @@ function AdminApp() {
     const [currentDate, setCurrentDate] = React.useState(new Date());
     const [diasLaborales, setDiasLaborales] = React.useState([]);
     const [fechasConHorarios, setFechasConHorarios] = React.useState({});
+    
+    // NUEVO: Estado para cambiar entre vista calendario y lista
+    const [vistaReservas, setVistaReservas] = React.useState('calendario');
 
     // ============================================
     // FUNCIÓN PARA CARGAR DÍAS CERRADOS DIRECTAMENTE DE SUPABASE
@@ -987,7 +1024,7 @@ function AdminApp() {
     };
 
     // ============================================
-    // FUNCIONES DEL CALENDARIO (para el modal de disponibilidad)
+    // FUNCIONES DEL CALENDARIO
     // ============================================
     
     const getDaysInMonth = (date) => {
@@ -1282,23 +1319,6 @@ function AdminApp() {
     }, [userRole, userNivel, profesional]);
 
     // ============================================
-    // NUEVAS FUNCIONES PARA EL CALENDARIO DE RESERVAS
-    // ============================================
-    const handleCalendarEventClick = (event) => {
-        const data = event.extendedProps;
-        const action = confirm(`📅 *Reserva de ${data.cliente_nombre}*\n\n💅 Servicio: ${data.servicio}\n👤 Profesional: ${data.profesional_nombre}\n📅 Fecha: ${window.formatFechaCompleta ? window.formatFechaCompleta(data.fecha) : data.fecha}\n⏰ Hora: ${formatTo12Hour(data.hora_inicio)}\n💰 Estado: ${data.estado}\n\n¿Qué deseas hacer?\n✅ OK = Confirmar pago (si está pendiente)\n❌ Cancelar = Cancelar turno`);
-        if (action) {
-            if (data.estado === 'Pendiente') confirmarPago(event.id, data);
-            else handleCancel(event.id, data);
-        }
-    };
-
-    const handleCalendarDateSelect = (dateStr) => {
-        setNuevaReservaData({ ...nuevaReservaData, fecha: dateStr.split('T')[0] });
-        setShowNuevaReservaModal(true);
-    };
-
-    // ============================================
     // FUNCIÓN PARA CONFIRMAR PAGO
     // ============================================
     const confirmarPago = async (id, bookingData) => {
@@ -1439,6 +1459,23 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
             console.log('🚪 Sesión cerrada, redirigiendo a index.html');
             window.location.href = 'index.html';
         }
+    };
+
+    // ============================================
+    // NUEVAS FUNCIONES PARA EL CALENDARIO DE RESERVAS
+    // ============================================
+    const handleCalendarEventClick = (event) => {
+        const data = event.extendedProps;
+        const action = confirm(`📅 *Reserva de ${data.cliente_nombre}*\n\n💅 Servicio: ${data.servicio}\n👤 Profesional: ${data.profesional_nombre}\n📅 Fecha: ${window.formatFechaCompleta ? window.formatFechaCompleta(data.fecha) : data.fecha}\n⏰ Hora: ${formatTo12Hour(data.hora_inicio)}\n💰 Estado: ${data.estado}\n\n¿Qué deseas hacer?\n✅ OK = Confirmar pago (si está pendiente)\n❌ Cancelar = Cancelar turno`);
+        if (action) {
+            if (data.estado === 'Pendiente') confirmarPago(event.id, data);
+            else handleCancel(event.id, data);
+        }
+    };
+
+    const handleCalendarDateSelect = (dateStr) => {
+        setNuevaReservaData({ ...nuevaReservaData, fecha: dateStr.split('T')[0] });
+        setShowNuevaReservaModal(true);
     };
 
     // ============================================
