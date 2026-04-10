@@ -3,12 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Administración</title>
+    <title>Panel de Administración - Gordis Nails</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://resource.trickle.so/vendor_lib/unpkg/react@18/umd/react.production.min.js"></script>
     <script src="https://resource.trickle.so/vendor_lib/unpkg/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://resource.trickle.so/vendor_lib/unpkg/@babel/standalone/babel.min.js"></script>
     <link href="https://resource.trickle.so/vendor_lib/unpkg/lucide-static@0.516.0/font/lucide.css" rel="stylesheet">
+    
+    <!-- FullCalendar CSS y JS -->
+    <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css' rel='stylesheet' />
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
+    
+    <style>
+        /* Estilos personalizados para el calendario */
+        :root {
+            --fc-today-bg-color: rgba(139, 92, 246, 0.1);
+            --fc-event-border-color: #8B5CF6;
+            --fc-event-bg-color: #8B5CF6;
+        }
+        
+        .fc .fc-button-primary {
+            background-color: #8B5CF6 !important;
+            border-color: #7C3AED !important;
+        }
+        
+        .fc .fc-button-primary:hover {
+            background-color: #7C3AED !important;
+        }
+        
+        .fc .fc-button-primary:disabled {
+            background-color: #C4B5FD !important;
+        }
+        
+        .fc .fc-day-today {
+            background-color: var(--fc-today-bg-color) !important;
+        }
+        
+        .fc-event {
+            cursor: pointer !important;
+        }
+        
+        /* Animación */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
     <div id="root"></div>
@@ -24,7 +67,7 @@
     <script src="utils/servicios.js"></script>
     <script src="utils/profesionales.js"></script>
     <script src="utils/config.js"></script>
-    <script src="utils/whatsapp-helper.js"></script>  <!-- ✅ AGREGADO - WHATSAPP GLOBAL -->
+    <script src="utils/whatsapp-helper.js"></script>
 
     <!-- Componentes admin -->
     <script src="components/admin/ConfigPanel.js" type="text/babel"></script>
