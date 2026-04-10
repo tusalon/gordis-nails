@@ -1,4 +1,4 @@
-// admin-app.js - Panel de administración (VERSIÓN CORREGIDA CON HORARIOS POR DÍA)
+﻿// admin-app.js - Panel de administración (VERSIÓN CORREGIDA CON HORARIOS POR DÍA)
 // CON BOTÓN DE NUEVA RESERVA MANUAL, CALENDARIO DE DISPONIBILIDAD Y VISTA CALENDARIO
 
 console.log('🚀 ADMIN-APP.JS - Panel de administración con Nueva Reserva, Calendario Disponibilidad y Vista Calendario (08:00-16:00)');
@@ -303,7 +303,7 @@ const indiceToHoraLegible = (indice) => {
 // ============================================
 function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, profesionalesList, serviciosList, onCreateBooking, profesionalesDisponibles }) {
     const calendarRef = React.useRef(null);
-    const calendarApiRef = React.useState(null);
+    const calendarApiRef = React.useRef(null);
     const [calendarReady, setCalendarReady] = React.useState(false);
     const [horariosDisponiblesCache, setHorariosDisponiblesCache] = React.useState({});
 
@@ -448,9 +448,9 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, profesio
         console.log('📅 Eventos disponibles:', eventosDisponibles.length);
         
         // Limpiar y agregar todos los eventos
-        calendarApiRef.removeAllEvents();
-        calendarApiRef.addEventSource(eventosReservas);
-        calendarApiRef.addEventSource(eventosDisponibles);
+        calendarApiRef.current.removeAllEvents();
+        calendarApiRef.current.addEventSource(eventosReservas);
+        calendarApiRef.current.addEventSource(eventosDisponibles);
     };
 
     // Inicializar calendario
@@ -550,12 +550,12 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, profesio
         });
         
         calendar.render();
-        setCalendarApiRef(calendar);
+        calendarApiRef.current = calendar;
         setCalendarReady(true);
         
         return () => {
-            if (calendarApiRef) {
-                calendarApiRef.destroy();
+            if (calendarApiRef.current) {
+                calendarApiRef.current.destroy();
             }
         };
     }, []);
