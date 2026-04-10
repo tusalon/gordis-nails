@@ -299,18 +299,165 @@ const indiceToHoraLegible = (indice) => {
 };
 
 // ============================================
-// COMPONENTE AdminCalendar (VERSIÓN CORREGIDA - ACTUALIZA CUANDO LLEGAN DATOS)
+// COMPONENTE AdminCalendar (CON HORARIOS DISPONIBLES Y CREACIÓN DIRECTA)
 // ============================================
-function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
+function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, profesionalesList, serviciosList, onCreateBooking, profesionalesDisponibles }) {
     const calendarRef = React.useRef(null);
-    const calendarApiRef = React.useRef(null);
+    const calendarApiRef = React.useState(null);
     const [calendarReady, setCalendarReady] = React.useState(false);
+    const [horariosDisponiblesCache, setHorariosDisponiblesCache] = React.useState({});
 
-    // Inicializar calendario UNA SOLA VEZ
-    React.useEffect(() => {
-        if (!calendarRef.current || calendarApiRef.current) return;
+    // Generar horarios disponibles para una fecha específica
+    const generarHorariosDisponibles = async (fecha, profesionalId = null) => {
+        try {
+            const fechaStr = fecha.split('T')[0];
+            const cacheKey = `${fechaStr}_${profesionalId || 'todos'}`;
+            
+            if (horariosDisponiblesCache[cacheKey]) {
+                return horariosDisponiblesCache[cacheKey];
+            }
+            
+            // Si no hay profesional seleccionado, mostrar horarios del primer profesional activo
+            let targetProfesionalId = profesionalId;
+            if (!targetProfesionalId && profesionalesList && profesionalesList.length > 0) {
+                targetProfesionalId = profesionalesList[0].id;
+            }
+            
+            if (!targetProfesionalId) return [];
+            
+            // Obtener horarios del profesional
+            const horariosProf = await window.salonConfig.getHorariosProfesional(targetProfesionalId);
+            const horariosPorDia = horariosProf.horariosPorDia || {};
+            
+            // Obtener día de la semana
+            const fechaDate = new Date(fechaStr);
+            const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+            const diaSemana = diasSemana[fechaDate.getDay()];
+            
+            let slotsDelDia = horariosPorDia[diaSemana] || [];
+            slotsDelDia = slotsDelDia.map(i => indiceToHoraLegible(i));
+            
+            // Obtener reservas existentes para esa fecha y profesional
+            const reservasResponse = await fetch(
+                `${window.SUPABASE_URL}/rest/v1/reservas?fecha=eq.${fechaStr}&profesional_id=eq.${targetProfesionalId}&estado=neq.Cancelado&select=hora_inicio,hora_fin`,
+                {
+                    headers: {
+                        'apikey': window.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
+                    }
+                }
+            );
+            const reservas = await reservasResponse.json();
+            
+            // Filtrar slots ocupados
+            const slotsOcupados = new Set();
+            reservas.forEach(reserva => {
+                const horaInicio = reserva.hora_inicio;
+                slotsOcupados.add(horaInicio);
+            });
+            
+            const slotsLibres = slotsDelDia.filter(slot => !slotsOcupados.has(slot));
+            
+            // Guardar en caché
+            setHorariosDisponiblesCache(prev => ({ ...prev, [cacheKey]: slotsLibres }));
+            
+            return slotsLibres;
+        } catch (error) {
+            console.error('Error generando horarios disponibles:', error);
+            return [];
+        }
+    };
+
+    // Actualizar eventos cuando cambian las reservas
+    const actualizarEventos = async () => {
+        if (!calendarApiRef || !calendarReady) return;
         
-        console.log('📅 Inicializando calendario con horario 08:00-16:00...');
+        console.log('🔄 ACTUALIZANDO CALENDARIO - Bookings:', bookings.length);
+        
+        const reservasActivas = bookings.filter(b => 
+            b.estado === 'Reservado' || b.estado === 'Pendiente'
+        );
+        
+        // Eventos de reservas existentes
+        const eventosReservas = reservasActivas.map(booking => {
+            const backgroundColor = booking.estado === 'Pendiente' ? '#F59E0B' : '#10B981';
+            const profesional = booking.profesional_nombre || booking.trabajador_nombre || 'No asignado';
+            
+            return {
+                id: String(booking.id),
+                title: `${booking.servicio} - ${booking.cliente_nombre}`,
+                start: `${booking.fecha}T${booking.hora_inicio}`,
+                end: `${booking.fecha}T${booking.hora_fin}`,
+                backgroundColor: backgroundColor,
+                borderColor: backgroundColor,
+                classNames: ['reserva-existente'],
+                extendedProps: {
+                    ...booking,
+                    esDisponible: false,
+                    profesional_nombre: profesional
+                }
+            };
+        });
+        
+        // Generar eventos de horarios disponibles (solo para fechas futuras)
+        const hoy = new Date().toISOString().split('T')[0];
+        const eventosDisponibles = [];
+        
+        // Obtener próximos 14 días para mostrar disponibilidad
+        for (let i = 0; i < 14; i++) {
+            const fecha = new Date();
+            fecha.setDate(fecha.getDate() + i);
+            const fechaStr = fecha.toISOString().split('T')[0];
+            
+            if (fechaStr < hoy) continue;
+            
+            // Para cada profesional activo
+            const profesionalesActivos = profesionalesList.filter(p => p.activo !== false);
+            
+            for (const prof of profesionalesActivos) {
+                const horariosLibres = await generarHorariosDisponibles(fechaStr, prof.id);
+                
+                for (const hora of horariosLibres) {
+                    // Calcular hora de fin (1 hora por defecto)
+                    const [h, m] = hora.split(':').map(Number);
+                    const horaFin = `${(h + 1).toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                    
+                    eventosDisponibles.push({
+                        id: `disponible_${fechaStr}_${prof.id}_${hora}`,
+                        title: `📌 LIBRE - ${prof.nombre}`,
+                        start: `${fechaStr}T${hora}`,
+                        end: `${fechaStr}T${horaFin}`,
+                        backgroundColor: '#E5E7EB',
+                        borderColor: '#9CA3AF',
+                        textColor: '#374151',
+                        classNames: ['horario-disponible'],
+                        extendedProps: {
+                            esDisponible: true,
+                            profesional_id: prof.id,
+                            profesional_nombre: prof.nombre,
+                            fecha: fechaStr,
+                            hora_inicio: hora,
+                            hora_fin: horaFin
+                        }
+                    });
+                }
+            }
+        }
+        
+        console.log('📅 Eventos reservas:', eventosReservas.length);
+        console.log('📅 Eventos disponibles:', eventosDisponibles.length);
+        
+        // Limpiar y agregar todos los eventos
+        calendarApiRef.removeAllEvents();
+        calendarApiRef.addEventSource(eventosReservas);
+        calendarApiRef.addEventSource(eventosDisponibles);
+    };
+
+    // Inicializar calendario
+    React.useEffect(() => {
+        if (!calendarRef.current || calendarApiRef) return;
+        
+        console.log('📅 Inicializando calendario con horarios disponibles...');
         
         const calendar = new FullCalendar.Calendar(calendarRef.current, {
             locale: 'es',
@@ -320,15 +467,73 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
                 center: 'title',
                 right: 'dayGridMonth,timeGridWeek,timeGridDay'
             },
-            editable: false,
-            droppable: false,
+            editable: true,
+            droppable: true,
+            eventDurationEditable: true,
+            eventStartEditable: true,
             eventClick: (info) => {
-                console.log('📅 Click en evento:', info.event.id);
-                onEventClick(info.event);
+                const eventProps = info.event.extendedProps;
+                if (eventProps.esDisponible) {
+                    // Click en horario disponible - abrir modal de nueva reserva
+                    console.log('📌 Click en horario disponible:', eventProps);
+                    if (onCreateBooking) {
+                        onCreateBooking({
+                            fecha: eventProps.fecha,
+                            hora_inicio: eventProps.hora_inicio,
+                            profesional_id: eventProps.profesional_id,
+                            profesional_nombre: eventProps.profesional_nombre
+                        });
+                    }
+                } else {
+                    // Click en reserva existente
+                    onEventClick(info.event);
+                }
             },
             dateClick: (info) => {
+                // Click en fecha vacía - abrir modal para nueva reserva
                 console.log('📅 Click en fecha:', info.dateStr);
                 onDateSelect(info.dateStr);
+            },
+            eventDrop: async (info) => {
+                // Arrastrar evento a nuevo horario
+                const event = info.event;
+                const eventProps = event.extendedProps;
+                
+                if (eventProps.esDisponible) {
+                    info.revert();
+                    return;
+                }
+                
+                const newStart = info.event.start;
+                const newEnd = info.event.end;
+                const newFecha = newStart.toISOString().split('T')[0];
+                const newHoraInicio = newStart.toISOString().split('T')[1].substring(0, 5);
+                const newHoraFin = newEnd.toISOString().split('T')[1].substring(0, 5);
+                
+                const confirmar = confirm(`¿Mover reserva de ${eventProps.cliente_nombre} al ${newFecha} a las ${newHoraInicio}?`);
+                if (!confirmar) {
+                    info.revert();
+                    return;
+                }
+                
+                // Verificar disponibilidad
+                const disponible = await verificarDisponibilidad(eventProps.profesional_id, newFecha, newHoraInicio, eventProps.duracion || 60);
+                if (!disponible) {
+                    alert('❌ El profesional no está disponible en ese horario');
+                    info.revert();
+                    return;
+                }
+                
+                // Actualizar en Supabase
+                const success = await actualizarReservaFecha(event.id, newFecha, newHoraInicio, newHoraFin);
+                if (success) {
+                    alert('✅ Reserva re-agendada exitosamente');
+                    // Actualizar bookings
+                    window.location.reload();
+                } else {
+                    alert('❌ Error al re-agendar');
+                    info.revert();
+                }
             },
             height: 'auto',
             slotMinTime: '08:00:00',
@@ -345,84 +550,81 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
         });
         
         calendar.render();
-        calendarApiRef.current = calendar;
+        setCalendarApiRef(calendar);
         setCalendarReady(true);
         
         return () => {
-            if (calendarApiRef.current) {
-                try {
-                    calendarApiRef.current.destroy();
-                } catch(e) {}
-                calendarApiRef.current = null;
+            if (calendarApiRef) {
+                calendarApiRef.destroy();
             }
         };
     }, []);
 
-    // ACTUALIZAR EVENTOS CADA VEZ QUE CAMBIAN bookings
+    // Actualizar eventos cuando cambian los datos
     React.useEffect(() => {
-        if (!calendarApiRef.current || !calendarReady) {
-            console.log('⏳ Calendario no listo aún, esperando...');
-            return;
+        if (calendarReady && calendarApiRef) {
+            actualizarEventos();
         }
-        
-        console.log('🔄 ACTUALIZANDO CALENDARIO - Bookings recibidas:', bookings.length);
-        
-        // Filtrar reservas activas (Reservado y Pendiente, NO canceladas NO completadas)
-        const reservasActivas = bookings.filter(b => 
-            b.estado === 'Reservado' || b.estado === 'Pendiente'
-        );
-        
-        console.log('📅 Reservas activas para mostrar:', reservasActivas.length);
-        
-        if (reservasActivas.length === 0) {
-            console.log('⚠️ No hay reservas activas para mostrar');
-            calendarApiRef.current.removeAllEvents();
-            return;
-        }
-        
-        const events = reservasActivas.map(booking => {
-            const backgroundColor = booking.estado === 'Pendiente' ? '#F59E0B' : '#10B981';
-            const profesional = booking.profesional_nombre || booking.trabajador_nombre || 'No asignado';
-            
-            // Formato correcto de fecha y hora
-            const start = `${booking.fecha}T${booking.hora_inicio}`;
-            const end = `${booking.fecha}T${booking.hora_fin}`;
-            
-            console.log(`📅 Evento: ${booking.fecha} ${booking.hora_inicio} - ${booking.cliente_nombre} (${booking.estado})`);
-            
-            return {
-                id: String(booking.id),
-                title: `${booking.servicio} - ${booking.cliente_nombre}`,
-                start: start,
-                end: end,
-                backgroundColor: backgroundColor,
-                borderColor: backgroundColor,
-                extendedProps: {
-                    cliente_nombre: booking.cliente_nombre,
-                    cliente_whatsapp: booking.cliente_whatsapp,
-                    servicio: booking.servicio,
-                    profesional_nombre: profesional,
-                    estado: booking.estado,
-                    fecha: booking.fecha,
-                    hora_inicio: booking.hora_inicio,
-                    hora_fin: booking.hora_fin,
-                    id: booking.id
+    }, [bookings, profesionalesList, calendarReady]);
+
+    // Funciones auxiliares
+    const indiceToHoraLegible = (indice) => {
+        const horas = Math.floor(indice / 2);
+        const minutos = indice % 2 === 0 ? '00' : '30';
+        return `${horas.toString().padStart(2, '0')}:${minutos}`;
+    };
+
+    const verificarDisponibilidad = async (profesionalId, fecha, horaInicio, duracion) => {
+        try {
+            const horaFin = calculateEndTime(horaInicio, duracion);
+            const response = await fetch(
+                `${window.SUPABASE_URL}/rest/v1/reservas?fecha=eq.${fecha}&profesional_id=eq.${profesionalId}&estado=neq.Cancelado&select=hora_inicio,hora_fin`,
+                {
+                    headers: {
+                        'apikey': window.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
+                    }
                 }
-            };
-        });
-        
-        console.log('📅 Eventos generados para calendario:', events.length);
-        
-        // Limpiar y agregar eventos
-        calendarApiRef.current.removeAllEvents();
-        if (events.length > 0) {
-            calendarApiRef.current.addEventSource(events);
-            console.log('✅ Eventos agregados al calendario');
-        } else {
-            console.log('⚠️ No se generaron eventos');
+            );
+            const reservas = await response.json();
+            
+            const startMin = timeToMinutes(horaInicio);
+            const endMin = timeToMinutes(horaFin);
+            
+            const conflicto = reservas.some(r => {
+                const rStart = timeToMinutes(r.hora_inicio);
+                const rEnd = timeToMinutes(r.hora_fin);
+                return (startMin < rEnd && endMin > rStart);
+            });
+            
+            return !conflicto;
+        } catch (error) {
+            console.error('Error verificando disponibilidad:', error);
+            return false;
         }
-        
-    }, [bookings, calendarReady]);
+    };
+
+    const actualizarReservaFecha = async (id, fecha, horaInicio, horaFin) => {
+        try {
+            const negocioId = getNegocioId();
+            const response = await fetch(
+                `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&id=eq.${id}`,
+                {
+                    method: 'PATCH',
+                    headers: {
+                        'apikey': window.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ fecha, hora_inicio: horaInicio, hora_fin: horaFin })
+                }
+            );
+            return response.ok;
+        } catch (error) {
+            console.error('Error actualizando reserva:', error);
+            return false;
+        }
+    };
 
     if (loading) {
         return (
@@ -436,11 +638,20 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
     return (
         <div className="bg-white rounded-xl shadow-sm p-2 animate-fade-in">
             <div ref={calendarRef}></div>
-            {bookings.filter(b => b.estado === 'Reservado' || b.estado === 'Pendiente').length === 0 && (
-                <div className="text-center py-4 text-gray-400 text-sm border-t mt-2">
-                    No hay turnos activos para mostrar
+            <div className="text-xs text-gray-400 text-center mt-2 flex justify-center gap-4">
+                <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span>Reservado</span>
                 </div>
-            )}
+                <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                    <span>Pendiente</span>
+                </div>
+                <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded-full bg-gray-300"></div>
+                    <span>Horario Libre</span>
+                </div>
+            </div>
         </div>
     );
 }
@@ -1901,12 +2112,23 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                         </div>
 
                         {vistaReservas === 'calendario' ? (
-                            <AdminCalendar 
-                                bookings={bookings} 
-                                loading={loading} 
-                                onEventClick={handleCalendarEventClick} 
-                                onDateSelect={handleCalendarDateSelect} 
-                            />
+                           <AdminCalendar 
+    bookings={bookings} 
+    loading={loading} 
+    onEventClick={handleCalendarEventClick} 
+    onDateSelect={handleCalendarDateSelect}
+    profesionalesList={profesionalesList}
+    serviciosList={serviciosList}
+    onCreateBooking={(datos) => {
+        setNuevaReservaData({
+            ...nuevaReservaData,
+            fecha: datos.fecha,
+            hora_inicio: datos.hora_inicio,
+            profesional_id: datos.profesional_id
+        });
+        setShowNuevaReservaModal(true);
+    }}
+/>
                         ) : (
                             <ListaDeReservas 
                                 bookings={bookings} 
