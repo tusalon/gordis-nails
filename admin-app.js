@@ -299,24 +299,16 @@ const indiceToHoraLegible = (indice) => {
 };
 
 // ============================================
-// COMPONENTE AdminCalendar (Vista Calendario con FullCalendar - VERSIÓN ROBUSTA)
+// COMPONENTE AdminCalendar (VERSIÓN CORREGIDA - ACTUALIZA CUANDO LLEGAN DATOS)
 // ============================================
 function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
     const calendarRef = React.useRef(null);
     const calendarApiRef = React.useRef(null);
-    const [calendarKey, setCalendarKey] = React.useState(0);
+    const [calendarReady, setCalendarReady] = React.useState(false);
 
     // Inicializar calendario UNA SOLA VEZ
     React.useEffect(() => {
-        if (!calendarRef.current) return;
-        
-        // Destruir calendario anterior si existe
-        if (calendarApiRef.current) {
-            try {
-                calendarApiRef.current.destroy();
-            } catch(e) { console.warn('Error destruyendo calendario:', e); }
-            calendarApiRef.current = null;
-        }
+        if (!calendarRef.current || calendarApiRef.current) return;
         
         console.log('📅 Inicializando calendario con horario 08:00-16:00...');
         
@@ -345,11 +337,6 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
             nowIndicator: true,
             slotDuration: '00:30:00',
             slotLabelInterval: '01:00',
-            businessHours: { 
-                daysOfWeek: [1,2,3,4,5,6], 
-                startTime: '08:00', 
-                endTime: '16:00' 
-            },
             eventTimeFormat: {
                 hour: 'numeric',
                 minute: '2-digit',
@@ -359,6 +346,7 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
         
         calendar.render();
         calendarApiRef.current = calendar;
+        setCalendarReady(true);
         
         return () => {
             if (calendarApiRef.current) {
@@ -368,60 +356,73 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
                 calendarApiRef.current = null;
             }
         };
-    }, [calendarKey]);
+    }, []);
 
-    // Actualizar eventos cuando cambian las reservas
+    // ACTUALIZAR EVENTOS CADA VEZ QUE CAMBIAN bookings
     React.useEffect(() => {
-        if (!calendarApiRef.current) {
-            setCalendarKey(prev => prev + 1);
+        if (!calendarApiRef.current || !calendarReady) {
+            console.log('⏳ Calendario no listo aún, esperando...');
             return;
         }
         
-        console.log('🔄 Actualizando calendario con', bookings.length, 'reservas');
+        console.log('🔄 ACTUALIZANDO CALENDARIO - Bookings recibidas:', bookings.length);
         
-        const events = bookings
-            .filter(b => b.estado !== 'Cancelado' && b.estado !== 'Completado')
-            .map(booking => {
-                let backgroundColor = '#10B981';
-                if (booking.estado === 'Pendiente') backgroundColor = '#F59E0B';
-                
-                const profesional = booking.profesional_nombre || booking.trabajador_nombre || 'No asignado';
-                const start = `${booking.fecha}T${booking.hora_inicio}`;
-                const end = `${booking.fecha}T${booking.hora_fin}`;
-                
-                return {
-                    id: String(booking.id),
-                    title: `${formatTo12Hour(booking.hora_inicio)} - ${booking.servicio} - ${booking.cliente_nombre}`,
-                    start: start,
-                    end: end,
-                    backgroundColor: backgroundColor,
-                    borderColor: backgroundColor,
-                    extendedProps: {
-                        cliente_nombre: booking.cliente_nombre,
-                        cliente_whatsapp: booking.cliente_whatsapp,
-                        servicio: booking.servicio,
-                        profesional_nombre: profesional,
-                        estado: booking.estado,
-                        duracion: booking.duracion,
-                        hora_inicio: booking.hora_inicio,
-                        hora_fin: booking.hora_fin,
-                        fecha: booking.fecha,
-                        id: booking.id
-                    }
-                };
-            });
+        // Filtrar reservas activas (Reservado y Pendiente, NO canceladas NO completadas)
+        const reservasActivas = bookings.filter(b => 
+            b.estado === 'Reservado' || b.estado === 'Pendiente'
+        );
         
-        console.log('📅 Eventos generados:', events.length);
+        console.log('📅 Reservas activas para mostrar:', reservasActivas.length);
         
-        try {
+        if (reservasActivas.length === 0) {
+            console.log('⚠️ No hay reservas activas para mostrar');
             calendarApiRef.current.removeAllEvents();
-            calendarApiRef.current.addEventSource(events);
-        } catch(e) {
-            console.error('Error actualizando eventos:', e);
-            setCalendarKey(prev => prev + 1);
+            return;
         }
         
-    }, [bookings]);
+        const events = reservasActivas.map(booking => {
+            const backgroundColor = booking.estado === 'Pendiente' ? '#F59E0B' : '#10B981';
+            const profesional = booking.profesional_nombre || booking.trabajador_nombre || 'No asignado';
+            
+            // Formato correcto de fecha y hora
+            const start = `${booking.fecha}T${booking.hora_inicio}`;
+            const end = `${booking.fecha}T${booking.hora_fin}`;
+            
+            console.log(`📅 Evento: ${booking.fecha} ${booking.hora_inicio} - ${booking.cliente_nombre} (${booking.estado})`);
+            
+            return {
+                id: String(booking.id),
+                title: `${booking.servicio} - ${booking.cliente_nombre}`,
+                start: start,
+                end: end,
+                backgroundColor: backgroundColor,
+                borderColor: backgroundColor,
+                extendedProps: {
+                    cliente_nombre: booking.cliente_nombre,
+                    cliente_whatsapp: booking.cliente_whatsapp,
+                    servicio: booking.servicio,
+                    profesional_nombre: profesional,
+                    estado: booking.estado,
+                    fecha: booking.fecha,
+                    hora_inicio: booking.hora_inicio,
+                    hora_fin: booking.hora_fin,
+                    id: booking.id
+                }
+            };
+        });
+        
+        console.log('📅 Eventos generados para calendario:', events.length);
+        
+        // Limpiar y agregar eventos
+        calendarApiRef.current.removeAllEvents();
+        if (events.length > 0) {
+            calendarApiRef.current.addEventSource(events);
+            console.log('✅ Eventos agregados al calendario');
+        } else {
+            console.log('⚠️ No se generaron eventos');
+        }
+        
+    }, [bookings, calendarReady]);
 
     if (loading) {
         return (
@@ -432,7 +433,16 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect }) {
         );
     }
 
-    return <div className="bg-white rounded-xl shadow-sm p-2 animate-fade-in" ref={calendarRef}></div>;
+    return (
+        <div className="bg-white rounded-xl shadow-sm p-2 animate-fade-in">
+            <div ref={calendarRef}></div>
+            {bookings.filter(b => b.estado === 'Reservado' || b.estado === 'Pendiente').length === 0 && (
+                <div className="text-center py-4 text-gray-400 text-sm border-t mt-2">
+                    No hay turnos activos para mostrar
+                </div>
+            )}
+        </div>
+    );
 }
 
 // ============================================
