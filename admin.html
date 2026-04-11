@@ -17,22 +17,22 @@
     <style>
         /* Estilos personalizados para el calendario */
         :root {
-            --fc-today-bg-color: rgba(139, 92, 246, 0.1);
-            --fc-event-border-color: #8B5CF6;
-            --fc-event-bg-color: #8B5CF6;
+            --fc-today-bg-color: rgba(236, 72, 153, 0.1);
+            --fc-event-border-color: #ec4899;
+            --fc-event-bg-color: #ec4899;
         }
         
         .fc .fc-button-primary {
-            background-color: #8B5CF6 !important;
-            border-color: #7C3AED !important;
+            background-color: #ec4899 !important;
+            border-color: #db2777 !important;
         }
         
         .fc .fc-button-primary:hover {
-            background-color: #7C3AED !important;
+            background-color: #db2777 !important;
         }
         
         .fc .fc-button-primary:disabled {
-            background-color: #C4B5FD !important;
+            background-color: #f9a8d4 !important;
         }
         
         .fc .fc-day-today {
@@ -70,6 +70,21 @@
         }
         .animate-fade-in {
             animation: fadeIn 0.3s ease-out forwards;
+        }
+        
+        /* Mejoras responsive para el calendario */
+        @media (max-width: 768px) {
+            .fc .fc-toolbar {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .fc .fc-toolbar-title {
+                font-size: 1rem !important;
+            }
+            .fc .fc-button {
+                padding: 0.2rem 0.4rem !important;
+                font-size: 0.7rem !important;
+            }
         }
     </style>
 </head>

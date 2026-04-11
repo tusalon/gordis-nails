@@ -1,7 +1,7 @@
-﻿// admin-app.js - Panel de administración (VERSIÓN COMPLETA CON CALENDARIO OPTIMIZADO)
+﻿// admin-app.js - Panel de administración (VERSIÓN COMPLETA CON CALENDARIO OPTIMIZADO Y FILTROS)
 // CON BOTÓN DE NUEVA RESERVA MANUAL, CALENDARIO DE DISPONIBILIDAD Y VISTA CALENDARIO
 
-console.log('🚀 ADMIN-APP.JS - Panel completo con Calendario Optimizado');
+console.log('🚀 ADMIN-APP.JS - Panel completo con Calendario Optimizado y Filtros');
 
 window.addEventListener('error', function(e) {
     console.error('❌ Error detectado:', e.message);
@@ -146,9 +146,9 @@ const getCurrentLocalDate = () => { const ahora = new Date(); return `${ahora.ge
 const indiceToHoraLegible = (indice) => { const horas = Math.floor(indice/2); const minutos = indice%2===0?'00':'30'; return `${horas.toString().padStart(2,'0')}:${minutos}`; };
 
 // ============================================
-// COMPONENTE AdminCalendar (VERSIÓN OPTIMIZADA CON DÍAS CERRADOS)
+// COMPONENTE AdminCalendar (VERSIÓN CORREGIDA CON FILTROS)
 // ============================================
-function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerradosFechas = [] }) {
+function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerradosFechas = [], filtroProfesional = 'todos', filtroServicio = 'todos', profesionalesList = [], serviciosList = [] }) {
     const calendarRef = React.useRef(null);
     const [calendar, setCalendar] = React.useState(null);
     const [eventosCargados, setEventosCargados] = React.useState(false);
@@ -207,7 +207,6 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             slotDuration: '00:30:00',
             slotLabelInterval: '01:00',
             lazyFetching: true,
-            eventLimit: true,
             dayMaxEvents: 3,
             dayCellClassNames: (arg) => {
                 const fechaStr = arg.date.toISOString().split('T')[0];
@@ -226,17 +225,35 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         };
     }, [diasCerradosFechas, reiniciar]);
 
-    // Actualizar eventos cuando cambian las reservas
+    // Actualizar eventos cuando cambian las reservas o los filtros
     React.useEffect(() => {
         if (!calendar) return;
         
         console.log('🔄 Actualizando calendario - Reservas totales:', bookings.length);
+        console.log('🔍 Filtro profesional:', filtroProfesional);
+        console.log('🔍 Filtro servicio:', filtroServicio);
         
-        const reservasActivas = bookings.filter(b => 
+        let reservasActivas = bookings.filter(b => 
             b.estado === 'Reservado' || b.estado === 'Pendiente'
         );
         
-        console.log('📅 Reservas activas:', reservasActivas.length);
+        // Aplicar filtro por profesional
+        if (filtroProfesional !== 'todos') {
+            reservasActivas = reservasActivas.filter(b => 
+                b.profesional_id == filtroProfesional || 
+                b.profesional_nombre === filtroProfesional ||
+                (b.trabajador_nombre && b.trabajador_nombre === filtroProfesional)
+            );
+        }
+        
+        // Aplicar filtro por servicio
+        if (filtroServicio !== 'todos') {
+            reservasActivas = reservasActivas.filter(b => 
+                b.servicio === filtroServicio
+            );
+        }
+        
+        console.log('📅 Reservas activas después de filtros:', reservasActivas.length);
         
         const events = reservasActivas.map(booking => {
             let backgroundColor = '#10B981';
@@ -275,7 +292,7 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         
         setEventosCargados(true);
         
-    }, [bookings, calendar]);
+    }, [bookings, calendar, filtroProfesional, filtroServicio]);
 
     if (loading) {
         return (
@@ -288,10 +305,16 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
 
     return (
         <div className="bg-white rounded-xl shadow-sm p-2 animate-fade-in">
-            <div className="text-xs text-gray-400 text-center mb-2 flex justify-center gap-4">
+            <div className="text-xs text-gray-400 text-center mb-2 flex justify-center gap-4 flex-wrap">
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500"></div><span>Reservado</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div><span>Pendiente</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>Día Cerrado</span></div>
+                {(filtroProfesional !== 'todos' || filtroServicio !== 'todos') && (
+                    <div className="flex items-center gap-1 ml-4">
+                        <span className="text-pink-500">🔍</span>
+                        <span className="text-pink-600">Filtros activos</span>
+                    </div>
+                )}
             </div>
             <div ref={calendarRef}></div>
             {!eventosCargados && bookings.length > 0 && (
@@ -400,6 +423,10 @@ function AdminApp() {
         const guardada = localStorage.getItem('vistaReservas');
         return guardada === 'lista' ? 'lista' : 'calendario';
     });
+    
+    // Filtros rápidos para el calendario
+    const [filtroProfesional, setFiltroProfesional] = React.useState('todos');
+    const [filtroServicio, setFiltroServicio] = React.useState('todos');
     
     const [showClientesRegistrados, setShowClientesRegistrados] = React.useState(false);
     const [clientesRegistrados, setClientesRegistrados] = React.useState([]);
@@ -1751,6 +1778,51 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                             </button>
                         </div>
 
+                        {/* Filtros rápidos */}
+                        <div className="bg-white p-3 rounded-xl shadow-sm mb-4">
+                            <div className="flex flex-wrap gap-4 items-center">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-pink-600">👩‍🎨 Filtrar por profesional:</span>
+                                    <select 
+                                        value={filtroProfesional} 
+                                        onChange={(e) => setFiltroProfesional(e.target.value)}
+                                        className="border rounded-lg px-3 py-1.5 text-sm bg-white"
+                                    >
+                                        <option value="todos">Todos los profesionales</option>
+                                        {profesionalesList.map(p => (
+                                            <option key={p.id} value={p.id}>{p.nombre}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-pink-600">💅 Filtrar por servicio:</span>
+                                    <select 
+                                        value={filtroServicio} 
+                                        onChange={(e) => setFiltroServicio(e.target.value)}
+                                        className="border rounded-lg px-3 py-1.5 text-sm bg-white"
+                                    >
+                                        <option value="todos">Todos los servicios</option>
+                                        {serviciosList.map(s => (
+                                            <option key={s.id} value={s.nombre}>{s.nombre}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                
+                                {(filtroProfesional !== 'todos' || filtroServicio !== 'todos') && (
+                                    <button 
+                                        onClick={() => {
+                                            setFiltroProfesional('todos');
+                                            setFiltroServicio('todos');
+                                        }}
+                                        className="text-sm text-pink-500 hover:text-pink-700 underline"
+                                    >
+                                        Limpiar filtros
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
                         {vistaReservas === 'calendario' ? (
                             <AdminCalendar 
                                 key="calendario"
@@ -1759,6 +1831,10 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                                 onEventClick={handleCalendarEventClick} 
                                 onDateSelect={handleCalendarDateSelect}
                                 diasCerradosFechas={diasCerradosFechas}
+                                filtroProfesional={filtroProfesional}
+                                filtroServicio={filtroServicio}
+                                profesionalesList={profesionalesList}
+                                serviciosList={serviciosList}
                             />
                         ) : (
                             <ListaDeReservas 
