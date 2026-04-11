@@ -43,6 +43,26 @@
             cursor: pointer !important;
         }
         
+        /* Estilo para días cerrados en el calendario */
+        .dia-cerrado {
+            background-color: #fee2e2 !important;
+            opacity: 0.6;
+            cursor: not-allowed !important;
+        }
+        
+        .dia-cerrado .fc-daygrid-day-number {
+            text-decoration: line-through;
+            color: #dc2626 !important;
+        }
+        
+        .dia-cerrado .fc-daygrid-day-top {
+            opacity: 0.5;
+        }
+        
+        .dia-cerrado .fc-daygrid-day-frame {
+            background-color: #fef2f2;
+        }
+        
         /* Animación */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }

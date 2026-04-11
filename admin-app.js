@@ -1,7 +1,7 @@
-﻿// admin-app.js - Panel de administración (VERSIÓN OPTIMIZADA CON VALIDACIÓN DE DISPONIBILIDAD)
+﻿// admin-app.js - Panel de administración (VERSIÓN COMPLETA CON CALENDARIO OPTIMIZADO)
 // CON BOTÓN DE NUEVA RESERVA MANUAL, CALENDARIO DE DISPONIBILIDAD Y VISTA CALENDARIO
 
-console.log('🚀 ADMIN-APP.JS - Panel optimizado con validación de disponibilidad');
+console.log('🚀 ADMIN-APP.JS - Panel completo con Calendario Optimizado');
 
 window.addEventListener('error', function(e) {
     console.error('❌ Error detectado:', e.message);
@@ -146,36 +146,31 @@ const getCurrentLocalDate = () => { const ahora = new Date(); return `${ahora.ge
 const indiceToHoraLegible = (indice) => { const horas = Math.floor(indice/2); const minutos = indice%2===0?'00':'30'; return `${horas.toString().padStart(2,'0')}:${minutos}`; };
 
 // ============================================
-// COMPONENTE AdminCalendar (VERSIÓN OPTIMIZADA CON VALIDACIÓN)
+// COMPONENTE AdminCalendar (VERSIÓN OPTIMIZADA CON DÍAS CERRADOS)
 // ============================================
-function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, onCreateBookingFromSlot, profesionalesList }) {
+function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerradosFechas = [] }) {
     const calendarRef = React.useRef(null);
     const [calendar, setCalendar] = React.useState(null);
-    const [horariosOcupados, setHorariosOcupados] = React.useState({});
+    const [eventosCargados, setEventosCargados] = React.useState(false);
+    const [reiniciar, setReiniciar] = React.useState(0);
 
-    // Función para verificar si un horario está ocupado
-    const verificarHorarioOcupado = (fecha, horaInicio, profesionalId) => {
-        const key = `${fecha}_${horaInicio}_${profesionalId}`;
-        return horariosOcupados[key] || false;
-    };
-
-    // Actualizar mapa de horarios ocupados
+    // Forzar reinicialización cuando cambia la pestaña
     React.useEffect(() => {
-        const ocupados = {};
-        bookings.forEach(booking => {
-            if (booking.estado !== 'Cancelado' && booking.estado !== 'Completado') {
-                const key = `${booking.fecha}_${booking.hora_inicio}_${booking.profesional_id}`;
-                ocupados[key] = true;
-            }
-        });
-        setHorariosOcupados(ocupados);
-    }, [bookings]);
+        if (calendar) {
+            try {
+                calendar.destroy();
+            } catch(e) {}
+            setCalendar(null);
+            setEventosCargados(false);
+        }
+        setReiniciar(prev => prev + 1);
+    }, []);
 
-    // Inicializar calendario optimizado
+    // Inicializar calendario
     React.useEffect(() => {
         if (!calendarRef.current || calendar) return;
         
-        console.log('📅 Inicializando calendario optimizado...');
+        console.log('📅 Inicializando calendario. Días cerrados:', diasCerradosFechas.length);
         
         const cal = new FullCalendar.Calendar(calendarRef.current, {
             locale: 'es',
@@ -187,33 +182,22 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, onCreate
             },
             editable: false,
             eventClick: (info) => {
+                console.log('📅 Click en evento:', info.event.id);
                 onEventClick(info.event);
             },
-            dateClick: async (info) => {
-                // Validar si la fecha ya pasó
+            dateClick: (info) => {
                 const fechaStr = info.dateStr.split('T')[0];
+                if (diasCerradosFechas.includes(fechaStr)) {
+                    alert('❌ El local está cerrado este día. No se pueden crear reservas.');
+                    return;
+                }
                 const hoy = getCurrentLocalDate();
                 if (fechaStr < hoy) {
                     alert('❌ No se pueden crear reservas en fechas pasadas');
                     return;
                 }
-                
-                // Verificar si hay algún profesional disponible
-                if (!profesionalesList || profesionalesList.length === 0) {
-                    alert('❌ No hay profesionales disponibles');
-                    return;
-                }
-                
-                // Abrir modal para crear reserva
-                if (onCreateBookingFromSlot) {
-                    onCreateBookingFromSlot({
-                        fecha: fechaStr,
-                        hora_inicio: info.dateStr.split('T')[1]?.substring(0, 5) || '09:00',
-                        profesional_id: profesionalesList[0]?.id
-                    });
-                } else {
-                    onDateSelect(info.dateStr);
-                }
+                console.log('📅 Click en fecha disponible:', fechaStr);
+                onDateSelect(info.dateStr);
             },
             height: 'auto',
             slotMinTime: '08:00:00',
@@ -225,10 +209,12 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, onCreate
             lazyFetching: true,
             eventLimit: true,
             dayMaxEvents: 3,
-            views: {
-                timeGrid: {
-                    eventLimit: 3
+            dayCellClassNames: (arg) => {
+                const fechaStr = arg.date.toISOString().split('T')[0];
+                if (diasCerradosFechas.includes(fechaStr)) {
+                    return ['dia-cerrado'];
                 }
+                return [];
             }
         });
         
@@ -238,17 +224,19 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, onCreate
         return () => {
             if (cal) cal.destroy();
         };
-    }, []);
+    }, [diasCerradosFechas, reiniciar]);
 
-    // Actualizar eventos de forma optimizada
+    // Actualizar eventos cuando cambian las reservas
     React.useEffect(() => {
         if (!calendar) return;
         
-        console.log('🔄 Actualizando calendario - Reservas:', bookings.length);
+        console.log('🔄 Actualizando calendario - Reservas totales:', bookings.length);
         
         const reservasActivas = bookings.filter(b => 
             b.estado === 'Reservado' || b.estado === 'Pendiente'
         );
+        
+        console.log('📅 Reservas activas:', reservasActivas.length);
         
         const events = reservasActivas.map(booking => {
             let backgroundColor = '#10B981';
@@ -273,17 +261,19 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, onCreate
                     fecha: booking.fecha,
                     hora_inicio: booking.hora_inicio,
                     hora_fin: booking.hora_fin,
-                    id: booking.id,
-                    ocupado: true
+                    id: booking.id
                 }
             };
         });
         
-        // Limpiar y agregar eventos de forma eficiente
+        console.log('📅 Eventos generados:', events.length);
+        
         calendar.removeAllEvents();
         if (events.length > 0) {
             calendar.addEventSource(events);
         }
+        
+        setEventosCargados(true);
         
     }, [bookings, calendar]);
 
@@ -299,20 +289,14 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, onCreate
     return (
         <div className="bg-white rounded-xl shadow-sm p-2 animate-fade-in">
             <div className="text-xs text-gray-400 text-center mb-2 flex justify-center gap-4">
-                <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                    <span>Reservado</span>
-                </div>
-                <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                    <span>Pendiente</span>
-                </div>
-                <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 rounded-full bg-gray-300"></div>
-                    <span>Horario Libre</span>
-                </div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500"></div><span>Reservado</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div><span>Pendiente</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>Día Cerrado</span></div>
             </div>
             <div ref={calendarRef}></div>
+            {!eventosCargados && bookings.length > 0 && (
+                <div className="text-center py-2 text-yellow-600 text-sm">Cargando eventos...</div>
+            )}
         </div>
     );
 }
@@ -411,8 +395,11 @@ function AdminApp() {
     
     const [tabActivo, setTabActivo] = React.useState('reservas');
     
-    // Estado para cambiar entre vista calendario y lista
-    const [vistaReservas, setVistaReservas] = React.useState('calendario');
+    // Vista persistente en localStorage
+    const [vistaReservas, setVistaReservas] = React.useState(() => {
+        const guardada = localStorage.getItem('vistaReservas');
+        return guardada === 'lista' ? 'lista' : 'calendario';
+    });
     
     const [showClientesRegistrados, setShowClientesRegistrados] = React.useState(false);
     const [clientesRegistrados, setClientesRegistrados] = React.useState([]);
@@ -445,6 +432,11 @@ function AdminApp() {
     const [currentDate, setCurrentDate] = React.useState(new Date());
     const [diasLaborales, setDiasLaborales] = React.useState([]);
     const [fechasConHorarios, setFechasConHorarios] = React.useState({});
+
+    // Guardar vista seleccionada en localStorage
+    React.useEffect(() => {
+        localStorage.setItem('vistaReservas', vistaReservas);
+    }, [vistaReservas]);
 
     // ============================================
     // FUNCIÓN PARA CARGAR DÍAS CERRADOS DIRECTAMENTE DE SUPABASE
@@ -1338,23 +1330,12 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
             return;
         }
         
-        setNuevaReservaData({ ...nuevaReservaData, fecha: fechaSeleccionada });
-        setShowNuevaReservaModal(true);
-    };
-    
-    const handleCreateBookingFromSlot = (slotData) => {
-        const hoy = getCurrentLocalDate();
-        if (slotData.fecha < hoy) {
-            alert('❌ No se pueden crear reservas en fechas pasadas');
+        if (diasCerradosFechas.includes(fechaSeleccionada)) {
+            alert('❌ El local está cerrado este día. No se pueden crear reservas.');
             return;
         }
         
-        setNuevaReservaData({
-            ...nuevaReservaData,
-            fecha: slotData.fecha,
-            hora_inicio: slotData.hora_inicio,
-            profesional_id: slotData.profesional_id
-        });
+        setNuevaReservaData({ ...nuevaReservaData, fecha: fechaSeleccionada });
         setShowNuevaReservaModal(true);
     };
 
@@ -1772,12 +1753,12 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
 
                         {vistaReservas === 'calendario' ? (
                             <AdminCalendar 
+                                key="calendario"
                                 bookings={bookings} 
                                 loading={loading} 
                                 onEventClick={handleCalendarEventClick} 
                                 onDateSelect={handleCalendarDateSelect}
-                                onCreateBookingFromSlot={handleCreateBookingFromSlot}
-                                profesionalesList={profesionalesList}
+                                diasCerradosFechas={diasCerradosFechas}
                             />
                         ) : (
                             <ListaDeReservas 
