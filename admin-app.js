@@ -31,6 +31,17 @@ const normalizarTexto = (texto) => {
     return texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 };
 
+// Función para escapar HTML (seguridad)
+const escapeHtml = (str) => {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+};
+
 // ============================================
 // FUNCIONES DE SUPABASE
 // ============================================
@@ -154,8 +165,8 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
     const [eventosCargados, setEventosCargados] = React.useState(false);
     const [diasNoLaborables, setDiasNoLaborables] = React.useState([]);
 
-    // 1. REF MÁGICO: Rompe el closure de React. Siempre tiene la data fresca sin reiniciar el calendario.
-    const datosReales = React.useRef({ filtroProfesional, diasNoLaborables, fechasConHorarios, diasCerradosFechas });
+    // REF MÁGICO: Rompe el closure de React. Siempre tiene la data fresca sin reiniciar el calendario.
+    const datosReales = React.useRef({ filtroProfesional, diasNoLaborables, fechasConHorarios, diasCerradosFechas, profesionalesList });
 
     React.useEffect(() => {
         const cargarHorariosProfesional = async () => {
@@ -173,10 +184,8 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 
                 const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
                 
-                // Determinamos los días que NO trabaja normalizando el texto
                 const noTrabaja = diasSemana.filter(dia => {
                     const diaNorm = normalizarTexto(dia);
-                    // Buscamos en el objeto original si existe la clave normalizada
                     const slots = horariosPorDiaObj[dia] || horariosPorDiaObj[diaNorm];
                     return !slots || slots.length === 0;
                 });
@@ -189,15 +198,32 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         cargarHorariosProfesional();
     }, [filtroProfesional, profesionalesList]);
 
-    // 2. MANTENEMOS EL REF ACTUALIZADO Y FORZAMOS EL REPINTADO DE CELDAS
+    // MANTENEMOS EL REF ACTUALIZADO Y FORZAMOS EL REPINTADO DE CELDAS
     React.useEffect(() => {
-        datosReales.current = { filtroProfesional, diasNoLaborables, fechasConHorarios, diasCerradosFechas };
+        datosReales.current = { filtroProfesional, diasNoLaborables, fechasConHorarios, diasCerradosFechas, profesionalesList };
         
         if (calendarApiRef.current) {
-            // Este es el truco maestro para FullCalendar: Reasignar la clase fuerza un repintado inmediato
             calendarApiRef.current.setOption('dayCellClassNames', getDayCellClassNames);
         }
-    }, [filtroProfesional, diasNoLaborables, fechasConHorarios, diasCerradosFechas]);
+    }, [filtroProfesional, diasNoLaborables, fechasConHorarios, diasCerradosFechas, profesionalesList]);
+
+    // Función para verificar si hay algún profesional que trabaje este día
+    const hayProfesionalDisponibleEnDia = (fechaObj) => {
+        const datos = datosReales.current;
+        if (datos.filtroProfesional !== 'todos') return true;
+        
+        const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+        const diaSemana = diasSemana[fechaObj.getDay()];
+        const diaNorm = normalizarTexto(diaSemana);
+        
+        for (const prof of datos.profesionalesList) {
+            if (!prof.activo) continue;
+            // Simplificado: si hay profesionales, asumimos que podrían tener disponibilidad
+            // La validación real se hace con fechasConHorarios
+            return true;
+        }
+        return datos.profesionalesList.length > 0;
+    };
 
     // Función de cálculo de clases visuales (Usa el Ref Mágico)
     const getDayCellClassNames = (arg) => {
@@ -217,18 +243,15 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         if (fechaStr < hoy) {
             clases.push('bg-gray-50', 'opacity-50', 'pointer-events-none');
         } else if (datos.diasCerradosFechas.includes(fechaStr)) {
-            clases.push('bg-red-50', 'opacity-50', 'pointer-events-none');
+            clases.push('bg-red-50', 'opacity-50', 'pointer-events-none', 'dia-cerrado');
         } else if (datos.filtroProfesional !== 'todos') {
             const noLabNorm = datos.diasNoLaborables.map(normalizarTexto);
             
             if (noLabNorm.includes(diaNorm)) {
-                // BLOQUEO ABSOLUTO PARA FULLCALENDAR (No clickeable, gris)
                 clases.push('bg-gray-200', 'opacity-60', 'pointer-events-none', 'cursor-not-allowed');
             } else if (datos.fechasConHorarios[fechaStr] === true) {
-                // DÍA CON CUPOS (Verde suave)
                 clases.push('bg-green-50', 'hover:bg-green-100', 'cursor-pointer');
             } else if (datos.fechasConHorarios[fechaStr] === false) {
-                // DÍA SIN CUPOS (Bloqueado)
                 clases.push('bg-red-50', 'opacity-80', 'pointer-events-none');
             }
         } else {
@@ -252,14 +275,13 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             const diaNorm = normalizarTexto(diaSemana);
             const noLabNorm = datos.diasNoLaborables.map(normalizarTexto);
             
-            if (noLabNorm.includes(diaNorm)) return false; 
-            
+            if (noLabNorm.includes(diaNorm)) return false;
             if (datos.fechasConHorarios[fechaStr] === false) return false;
         }
         return true;
     };
 
-    // 3. Inicializar calendario UNA SOLA VEZ
+    // Inicializar calendario UNA SOLA VEZ
     React.useEffect(() => {
         if (!calendarRef.current || calendarApiRef.current) return;
         
@@ -294,7 +316,7 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             slotLabelInterval: '01:00',
             lazyFetching: true,
             dayMaxEvents: 3,
-            dayCellClassNames: getDayCellClassNames // Usamos la función referenciada
+            dayCellClassNames: getDayCellClassNames
         });
         
         cal.render();
@@ -308,7 +330,7 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         };
     }, []);
 
-    // 4. Actualizar eventos cuando cambian las reservas
+    // Actualizar eventos cuando cambian las reservas
     React.useEffect(() => {
         if (!calendarApiRef.current) return;
         
@@ -364,6 +386,7 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>Día Cerrado / Lleno</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-300"></div><span>No laborable</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-200"></div><span>Disponible</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-100"></div><span>🚫 Día Cerrado</span></div>
             </div>
             
             <div ref={calendarRef} style={{ minHeight: '450px' }}></div>
@@ -648,7 +671,6 @@ function AdminApp() {
                 
                 diaSemana = normalizarTexto(diaSemana);
                 
-                // Normalizamos también las claves del objeto
                 const horariosNormalizados = {};
                 for (const [key, value] of Object.entries(horariosPorDia)) {
                     horariosNormalizados[normalizarTexto(key)] = value;
@@ -719,15 +741,12 @@ function AdminApp() {
         cargarHorarios();
     }, [nuevaReservaData.profesional_id, nuevaReservaData.fecha, nuevaReservaData.servicio, serviciosList]);
 
-    // ============================================
     // ACTUALIZAR MAPA DE DISPONIBILIDAD GLOBAL
-    // ============================================
     const actualizarMapaDisponibilidad = async (fechaBase, profId) => {
         try {
             const horarios = await window.salonConfig.getHorariosProfesional(profId);
             const horariosPorDiaBruto = horarios.horariosPorDia || {};
             
-            // NORMALIZAR CLAVES (ej: "Miércoles" -> "miercoles")
             const horariosPorDia = {};
             for (const [key, value] of Object.entries(horariosPorDiaBruto)) {
                 horariosPorDia[normalizarTexto(key)] = value;
@@ -768,9 +787,7 @@ function AdminApp() {
         }
     }, [bookings, filtroProfesional]);
 
-    // ============================================
     // FUNCIONES DE DISPONIBILIDAD (MODAL MÁS INFO)
-    // ============================================
     const cargarDisponibilidadMes = async (fecha, profesionalId) => {
         if (!profesionalId) return;
         
@@ -827,7 +844,6 @@ function AdminApp() {
                 const diaSemana = nombresDias[fechaActual.getDay()];
                 const diaNormalizado = normalizarTexto(diaSemana);
                 
-                // Normalizar objeto interno
                 const horariosNormalizados = {};
                 for (const [key, value] of Object.entries(horariosPorDia)) {
                     horariosNormalizados[normalizarTexto(key)] = value;
@@ -1068,6 +1084,253 @@ function AdminApp() {
         nuevaFecha.setMonth(disponibilidadFecha.getMonth() + direccion);
         setDisponibilidadFecha(nuevaFecha);
         cargarDisponibilidadDelMes(nuevaFecha, profesionalSeleccionadoDispo);
+    };
+
+    // ============================================
+    // NUEVA FUNCIÓN: PANEL DE INFO DEL TURNO
+    // ============================================
+    const mostrarPanelInfoTurno = (data, eventId) => {
+        const modalContainer = document.createElement('div');
+        modalContainer.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in';
+        modalContainer.innerHTML = `
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border-t-4 border-pink-500">
+                <div class="text-center mb-4">
+                    <div class="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <span class="text-3xl">📅</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800">Detalles del Turno</h3>
+                </div>
+                
+                <div class="space-y-3 bg-pink-50 p-4 rounded-xl mb-6">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">👤 Cliente:</span>
+                        <span class="font-semibold text-gray-800">${escapeHtml(data.cliente_nombre)}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">📱 WhatsApp:</span>
+                        <span class="font-semibold text-gray-800">${data.cliente_whatsapp}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">💅 Servicio:</span>
+                        <span class="font-semibold text-gray-800">${data.servicio}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">👩‍🎨 Profesional:</span>
+                        <span class="font-semibold text-gray-800">${data.profesional_nombre || data.trabajador_nombre || 'No asignado'}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">📅 Fecha:</span>
+                        <span class="font-semibold text-gray-800">${window.formatFechaCompleta ? window.formatFechaCompleta(data.fecha) : data.fecha}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">⏰ Hora:</span>
+                        <span class="font-semibold text-gray-800">${formatTo12Hour(data.hora_inicio)}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">💰 Estado:</span>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${data.estado === 'Reservado' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">
+                            ${data.estado}
+                        </span>
+                    </div>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button id="btnCancelar" class="flex-1 bg-red-500 text-white py-3 rounded-xl font-semibold hover:bg-red-600 transition flex items-center justify-center gap-2">
+                        <span>❌</span> Cancelar Turno
+                    </button>
+                    <button id="btnCerrar" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-300 transition flex items-center justify-center gap-2">
+                        <span>✅</span> OK
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modalContainer);
+        
+        const btnCancelar = modalContainer.querySelector('#btnCancelar');
+        const btnCerrar = modalContainer.querySelector('#btnCerrar');
+        
+        btnCancelar.addEventListener('click', async () => {
+            modalContainer.remove();
+            if (data.estado === 'Pendiente') {
+                confirmarPago(eventId, data);
+            } else {
+                handleCancel(eventId, data);
+            }
+        });
+        
+        btnCerrar.addEventListener('click', () => {
+            modalContainer.remove();
+        });
+        
+        modalContainer.addEventListener('click', (e) => {
+            if (e.target === modalContainer) {
+                modalContainer.remove();
+            }
+        });
+    };
+
+    // ============================================
+    // NUEVA FUNCIÓN: SELECCIÓN AUTOMÁTICA DE PROFESIONAL
+    // ============================================
+    const seleccionarProfesionalConDisponibilidad = async (fechaSeleccionada) => {
+        const profesionalesConDisponibilidad = [];
+        
+        for (const prof of profesionalesList) {
+            if (!prof.activo) continue;
+            
+            const horarios = await window.salonConfig.getHorariosProfesional(prof.id);
+            const horariosPorDia = horarios.horariosPorDia || {};
+            
+            const fecha = new Date(fechaSeleccionada);
+            const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+            const diaSemana = diasSemana[fecha.getDay()];
+            const diaNorm = normalizarTexto(diaSemana);
+            
+            const horariosNormalizados = {};
+            for (const [key, value] of Object.entries(horariosPorDia)) {
+                horariosNormalizados[normalizarTexto(key)] = value;
+            }
+            
+            const slotsDelDia = horariosNormalizados[diaNorm] || [];
+            if (slotsDelDia.length === 0) continue;
+            
+            const response = await fetch(
+                `${window.SUPABASE_URL}/rest/v1/reservas?fecha=eq.${fechaSeleccionada}&profesional_id=eq.${prof.id}&estado=neq.Cancelado&select=hora_inicio,hora_fin`,
+                {
+                    headers: {
+                        'apikey': window.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
+                    }
+                }
+            );
+            const reservas = await response.json();
+            
+            let tieneHorarioLibre = false;
+            for (const slot of slotsDelDia) {
+                const slotStr = indiceToHoraLegible(slot);
+                const slotStart = timeToMinutes(slotStr);
+                const slotEnd = slotStart + 60;
+                
+                const ocupado = reservas.some(reserva => {
+                    const rStart = timeToMinutes(reserva.hora_inicio);
+                    const rEnd = timeToMinutes(reserva.hora_fin);
+                    return (slotStart < rEnd && slotEnd > rStart);
+                });
+                
+                if (!ocupado) {
+                    tieneHorarioLibre = true;
+                    break;
+                }
+            }
+            
+            if (tieneHorarioLibre) {
+                profesionalesConDisponibilidad.push(prof);
+            }
+        }
+        
+        return profesionalesConDisponibilidad;
+    };
+
+    // ============================================
+    // FUNCIÓN MEJORADA PARA CLICK EN FECHA (CON SELECCIÓN AUTOMÁTICA)
+    // ============================================
+    const handleCalendarDateSelect = async (dateStr) => {
+        const fechaSeleccionada = dateStr.split('T')[0];
+        const hoy = getCurrentLocalDate();
+        
+        if (fechaSeleccionada < hoy) {
+            alert('❌ No se pueden crear reservas en fechas pasadas');
+            return;
+        }
+        
+        if (diasCerradosFechas.includes(fechaSeleccionada)) {
+            alert('❌ El local está cerrado este día. No se pueden crear reservas.');
+            return;
+        }
+        
+        const profesionalesDisponibles = await seleccionarProfesionalConDisponibilidad(fechaSeleccionada);
+        
+        if (profesionalesDisponibles.length === 0) {
+            alert('❌ No hay profesionales con disponibilidad para este día.');
+            return;
+        }
+        
+        if (profesionalesDisponibles.length === 1) {
+            setNuevaReservaData({
+                ...nuevaReservaData,
+                fecha: fechaSeleccionada,
+                profesional_id: profesionalesDisponibles[0].id
+            });
+            setShowNuevaReservaModal(true);
+            return;
+        }
+        
+        const profesionalOptions = profesionalesDisponibles.map(p => 
+            `<option value="${p.id}">${escapeHtml(p.nombre)} - ${escapeHtml(p.especialidad)}</option>`
+        ).join('');
+        
+        const modalContainer = document.createElement('div');
+        modalContainer.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in';
+        modalContainer.innerHTML = `
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                <div class="text-center mb-4">
+                    <div class="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <span class="text-3xl">👩‍🎨</span>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-800">Seleccionar Profesional</h3>
+                    <p class="text-gray-500 text-sm mt-1">Varios profesionales tienen disponibilidad para el ${fechaSeleccionada}</p>
+                </div>
+                
+                <select id="profesionalSelect" class="w-full border rounded-lg px-4 py-3 mb-6">
+                    ${profesionalOptions}
+                </select>
+                
+                <div class="flex gap-3">
+                    <button id="btnConfirmar" class="flex-1 bg-pink-500 text-white py-3 rounded-xl font-semibold hover:bg-pink-600 transition">
+                        ✅ Confirmar
+                    </button>
+                    <button id="btnCancelar" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-300 transition">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modalContainer);
+        
+        const btnConfirmar = modalContainer.querySelector('#btnConfirmar');
+        const btnCancelar = modalContainer.querySelector('#btnCancelar');
+        const selectProf = modalContainer.querySelector('#profesionalSelect');
+        
+        btnConfirmar.addEventListener('click', () => {
+            const profId = selectProf.value;
+            setNuevaReservaData({
+                ...nuevaReservaData,
+                fecha: fechaSeleccionada,
+                profesional_id: profId
+            });
+            setShowNuevaReservaModal(true);
+            modalContainer.remove();
+        });
+        
+        btnCancelar.addEventListener('click', () => {
+            modalContainer.remove();
+        });
+        
+        modalContainer.addEventListener('click', (e) => {
+            if (e.target === modalContainer) {
+                modalContainer.remove();
+            }
+        });
+    };
+
+    // ============================================
+    // FUNCIÓN MEJORADA PARA CLICK EN EVENTO (PANEL DE INFO)
+    // ============================================
+    const handleCalendarEventClick = (event) => {
+        const data = event.extendedProps;
+        mostrarPanelInfoTurno(data, event.id);
     };
 
     const handleCrearReservaManual = async () => {
@@ -1318,30 +1581,6 @@ function AdminApp() {
             localStorage.removeItem('negocioId');
             window.location.href = 'index.html';
         }
-    };
-
-    const handleCalendarEventClick = (event) => {
-        const data = event.extendedProps;
-        const action = confirm(`📅 *Reserva de ${data.cliente_nombre}*\n\n💅 Servicio: ${data.servicio}\n👤 Profesional: ${data.profesional_nombre}\n📅 Fecha: ${window.formatFechaCompleta ? window.formatFechaCompleta(data.fecha) : data.fecha}\n⏰ Hora: ${formatTo12Hour(data.hora_inicio)}\n💰 Estado: ${data.estado}\n\n¿Qué deseas hacer?\n✅ OK = Confirmar pago (si está pendiente)\n❌ Cancelar = Cancelar turno`);
-        if (action) {
-            if (data.estado === 'Pendiente') confirmarPago(event.id, data);
-            else handleCancel(event.id, data);
-        }
-    };
-
-    const handleCalendarDateSelect = (dateStr) => {
-        const fechaSeleccionada = dateStr.split('T')[0];
-        const hoy = getCurrentLocalDate();
-        if (fechaSeleccionada < hoy) {
-            alert('❌ No se pueden crear reservas en fechas pasadas');
-            return;
-        }
-        if (diasCerradosFechas.includes(fechaSeleccionada)) {
-            alert('❌ El local está cerrado este día. No se pueden crear reservas.');
-            return;
-        }
-        setNuevaReservaData({ ...nuevaReservaData, fecha: fechaSeleccionada });
-        setShowNuevaReservaModal(true);
     };
 
     const getFilteredBookings = () => {
