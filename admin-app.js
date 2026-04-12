@@ -187,29 +187,21 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         cargarHorariosProfesional();
     }, [filtroProfesional, profesionalesList]);
 
-    // Función para verificar si se puede crear cita en una fecha
-    const esFechaValidaParaCita = (fechaStr) => {
+    // Función silenciosa para verificar si se puede clickear una fecha en el calendario
+    const esFechaValidaParaCita = (fechaStr, dateObj) => {
         const hoy = getCurrentLocalDate();
         
-        if (diasCerradosFechas.includes(fechaStr)) {
-            alert('❌ El local está cerrado este día.');
-            return false;
-        }
+        // Bloqueo silencioso para fechas pasadas y días cerrados del local
+        if (fechaStr < hoy) return false;
+        if (diasCerradosFechas.includes(fechaStr)) return false;
         
-        if (fechaStr < hoy) {
-            alert('❌ No se pueden crear reservas en fechas pasadas');
-            return false;
-        }
-        
+        // Bloqueo silencioso si el profesional NO trabaja este día
         if (filtroProfesional !== 'todos') {
-            const fecha = new Date(fechaStr);
             const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-            const diaSemana = diasSemana[fecha.getDay()];
+            const diaSemana = diasSemana[dateObj.getDay()];
             
             if (diasNoLaborables.includes(diaSemana)) {
-                const profesional = profesionalesList.find(p => p.id == filtroProfesional);
-                alert(`❌ ${profesional?.nombre || 'El profesional'} no trabaja los ${diaSemana}s.`);
-                return false;
+                return false; // No alerta, simplemente bloquea el click
             }
         }
         
@@ -235,8 +227,14 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 onEventClick(info.event);
             },
             dateClick: (info) => {
-                const fechaStr = info.dateStr.split('T')[0];
-                if (esFechaValidaParaCita(fechaStr)) {
+                // Obtener la fecha local de forma segura extraída del objeto Date de FullCalendar
+                const year = info.date.getFullYear();
+                const month = String(info.date.getMonth() + 1).padStart(2, '0');
+                const day = String(info.date.getDate()).padStart(2, '0');
+                const fechaStr = `${year}-${month}-${day}`;
+                
+                // Le pasamos info.date para que el cálculo del día sea exacto
+                if (esFechaValidaParaCita(fechaStr, info.date)) {
                     onDateSelect(info.dateStr);
                 }
             },
@@ -250,18 +248,28 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             lazyFetching: true,
             dayMaxEvents: 3,
             dayCellClassNames: (arg) => {
-                const fechaStr = arg.date.toISOString().split('T')[0];
-                const fecha = arg.date;
-                const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-                const diaSemana = diasSemana[fecha.getDay()];
+                // Obtener la fecha local de forma segura
+                const year = arg.date.getFullYear();
+                const month = String(arg.date.getMonth() + 1).padStart(2, '0');
+                const day = String(arg.date.getDate()).padStart(2, '0');
+                const fechaStr = `${year}-${month}-${day}`;
                 
-                if (diasCerradosFechas.includes(fechaStr)) {
-                    return ['dia-cerrado'];
+                const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+                const diaSemana = diasSemana[arg.date.getDay()];
+                const hoy = getCurrentLocalDate();
+                
+                const clases = [];
+                
+                if (fechaStr < hoy) {
+                    clases.push('bg-gray-50', 'opacity-50');
+                } else if (diasCerradosFechas.includes(fechaStr)) {
+                    clases.push('bg-red-50', 'opacity-50');
+                } else if (filtroProfesional !== 'todos' && diasNoLaborables.includes(diaSemana)) {
+                    // APLICAMOS TAILWIND PARA BLOQUEAR Y OSCURECER LA COLUMNA
+                    clases.push('bg-gray-200', 'opacity-60', 'pointer-events-none');
                 }
-                if (filtroProfesional !== 'todos' && diasNoLaborables.includes(diaSemana)) {
-                    return ['dia-no-laborable'];
-                }
-                return [];
+                
+                return clases;
             }
         });
         
@@ -275,9 +283,9 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 calendarApiRef.current = null;
             }
         };
-    }, []);
+    }, []); // ← Solo se ejecuta UNA VEZ al montar el componente
 
-    // Actualizar eventos cuando cambian las reservas
+    // Actualizar eventos cuando cambian las reservas (sin destruir el calendario)
     React.useEffect(() => {
         if (!calendarApiRef.current) return;
         
@@ -341,14 +349,16 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
     // Actualizar estilos de días cuando cambian los días no laborables
     React.useEffect(() => {
         if (!calendarApiRef.current) return;
+        
+        // Refrescar la vista para que se apliquen los nuevos estilos
         calendarApiRef.current.refetchEvents();
         console.log('🔄 Calendario refrescado - Días no laborables actualizados');
+        
     }, [diasNoLaborables, diasCerradosFechas]);
-
-    // ELIMINAMOS EL RETURN TEMPRANO DE loading - USAMOS OVERLAY
 
     return (
         <div className="bg-white rounded-xl shadow-sm p-2 animate-fade-in relative">
+            
             {/* OVERLAY DE CARGA - Superpuesto sin destruir el calendario */}
             {loading && (
                 <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-50 flex flex-col items-center justify-center rounded-xl transition-all">
@@ -377,7 +387,8 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             )}
         </div>
     );
-} // ← ESTA LLAVE DE CIERRE ES LA QUE FALTABA
+} // <-- LLAVE DE CIERRE AÑADIDA CORRECTAMENTE
+
 // ============================================
 // COMPONENTE ListaDeReservas (Vista Lista Original)
 // ============================================
@@ -744,7 +755,7 @@ function AdminApp() {
     }, [nuevaReservaData.profesional_id, nuevaReservaData.fecha, nuevaReservaData.servicio, serviciosList]);
 
     // ============================================
-    // FUNCIONES DE DISPONIBILIDAD
+    // FUNCIONES DE DISPONIBILIDAD (MODIFICADAS Y SINCRONIZADAS)
     // ============================================
     
     const cargarDisponibilidadMes = async (fecha, profesionalId) => {
@@ -755,12 +766,11 @@ function AdminApp() {
             const month = fecha.getMonth();
             
             const horarios = await window.salonConfig.getHorariosProfesional(profesionalId);
-            const horasTrabajo = horarios.horas || [];
+            const diasTrabajo = horarios.dias || [];
+            const horariosPorDia = horarios.horariosPorDia || {};
             
-            if (horasTrabajo.length === 0) {
-                setFechasConHorarios({});
-                return;
-            }
+            const profesionalObj = profesionalesList.find(p => p.id === parseInt(profesionalId));
+            const fechasLibresPersonales = profesionalObj?.fechas_libres || [];
             
             const primerDia = new Date(year, month, 1);
             const ultimoDia = new Date(year, month + 1, 0);
@@ -790,18 +800,47 @@ function AdminApp() {
             
             const disponibilidad = {};
             const diasEnMes = ultimoDia.getDate();
+            const nombresDias = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
             
             for (let d = 1; d <= diasEnMes; d++) {
                 const fechaStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
                 
+                // 1. Bloquear si es un día libre personal
+                if (fechasLibresPersonales.includes(fechaStr)) {
+                    disponibilidad[fechaStr] = false;
+                    continue;
+                }
+                
+                const fechaActual = new Date(year, month, d);
+                const diaSemana = nombresDias[fechaActual.getDay()];
+                
+                // 2. Bloquear si NO tiene horarios configurados en este día específico
+                const horariosDelDia = horariosPorDia[diaSemana] || [];
+                if (horariosDelDia.length === 0) {
+                    disponibilidad[fechaStr] = false;
+                    continue;
+                }
+                
+                // 3. Bloquear si el día no está en su lista general de días de trabajo
+                let trabajaEsteDia = true;
+                if (diasTrabajo.length > 0 && !diasTrabajo.includes(diaSemana)) {
+                    trabajaEsteDia = false;
+                }
+                
+                if (!trabajaEsteDia) {
+                    disponibilidad[fechaStr] = false;
+                    continue;
+                }
+                
+                // 4. Calcular si aún le quedan turnos libres en el día
                 let horariosOcupados = 0;
                 const reservasDia = reservasPorFecha[fechaStr] || [];
                 
-                for (const horaIndice of horasTrabajo) {
+                for (const horaIndice of horariosDelDia) {
                     const slotStr = indiceToHoraLegible(horaIndice);
                     const [horas, minutos] = slotStr.split(':').map(Number);
                     const slotStart = horas * 60 + minutos;
-                    const slotEnd = slotStart + 60;
+                    const slotEnd = slotStart + 60; 
                     
                     const tieneConflicto = reservasDia.some(reserva => {
                         const reservaStart = timeToMinutes(reserva.hora_inicio);
@@ -814,7 +853,7 @@ function AdminApp() {
                     }
                 }
                 
-                const tieneDisponibilidad = horariosOcupados < horasTrabajo.length;
+                const tieneDisponibilidad = horariosOcupados < horariosDelDia.length;
                 disponibilidad[fechaStr] = tieneDisponibilidad;
             }
             
@@ -988,30 +1027,32 @@ function AdminApp() {
         if (!date || !nuevaReservaData.profesional_id) return false;
         
         const fechaStr = formatDate(date);
-        
-        if (diasCerradosFechas.includes(fechaStr)) {
-            return false;
-        }
-        
         const hoy = getCurrentLocalDate();
-        if (fechaStr < hoy) {
-            return false;
-        }
+
+        // 1. Bloqueo por fecha pasada
+        if (fechaStr < hoy) return false;
+
+        // 2. Bloqueo por local cerrado
+        if (diasCerradosFechas.includes(fechaStr)) return false;
         
         const profesional = profesionalesList.find(p => p.id === parseInt(nuevaReservaData.profesional_id));
-        if (profesional && profesional.fechas_libres && profesional.fechas_libres.includes(fechaStr)) {
-            return false;
-        }
+        if (!profesional) return false;
+
+        // 3. Bloqueo por feriados/días libres específicos del profesional
+        if (profesional.fechas_libres && profesional.fechas_libres.includes(fechaStr)) return false;
         
+        // 4. Bloqueo por día de la semana (Lunes, Martes...)
         const fechaLocal = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-        const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-        const diaSemana = diasSemana[fechaLocal.getDay()];
-        
+        const nombresDias = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+        const diaSemana = nombresDias[fechaLocal.getDay()];
+
+        // Verificamos si el día está en su lista de días laborales configurados
         if (diasLaborales.length > 0 && !diasLaborales.includes(diaSemana)) {
             return false;
         }
-        
-        return fechasConHorarios[fechaStr] || false;
+
+        // 5. Validación final contra el motor de disponibilidad (fechasConHorarios)
+        return fechasConHorarios[fechaStr] === true;
     };
     
     const handleDateSelect = (date) => {
@@ -1649,13 +1690,27 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                                                         const esCerrado = diasCerradosFechas.includes(fechaStr);
                                                         const esPasado = fechaStr < getCurrentLocalDate();
                                                         
-                                                        let className = "h-10 w-full rounded-lg text-sm font-medium";
-                                                        if (selected) className += " bg-pink-500 text-white shadow-md";
-                                                        else if (!available || esPasado || esCerrado) className += " text-gray-300 cursor-not-allowed bg-gray-50 line-through";
-                                                        else className += " text-gray-700 hover:bg-pink-50 cursor-pointer";
+                                                        const estaBloqueado = !available || esPasado || esCerrado;
+
+                                                        let className = "h-10 w-full rounded-lg text-sm font-medium transition-all";
+                                                        
+                                                        if (selected) {
+                                                            className += " bg-pink-500 text-white shadow-md z-10 scale-110";
+                                                        } else if (estaBloqueado) {
+                                                            className += " text-gray-300 cursor-not-allowed bg-gray-50/50 line-through opacity-50";
+                                                        } else {
+                                                            className += " text-gray-700 hover:bg-pink-100 hover:text-pink-600 cursor-pointer";
+                                                        }
                                                         
                                                         return (
-                                                            <button key={idx} onClick={() => handleDateSelect(date)} disabled={!available || esPasado || esCerrado} className={className} title={esCerrado ? "Día cerrado" : esPasado ? "Fecha pasada" : ""}>
+                                                            <button 
+                                                                key={idx} 
+                                                                type="button"
+                                                                onClick={() => !estaBloqueado && handleDateSelect(date)} 
+                                                                disabled={estaBloqueado}
+                                                                className={className} 
+                                                                title={estaBloqueado ? "No disponible" : "Seleccionar fecha"}
+                                                            >
                                                                 {date.getDate()}
                                                             </button>
                                                         );
