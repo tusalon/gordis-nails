@@ -191,19 +191,16 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
     const esFechaValidaParaCita = (fechaStr) => {
         const hoy = getCurrentLocalDate();
         
-        // Validar día cerrado por el local
         if (diasCerradosFechas.includes(fechaStr)) {
             alert('❌ El local está cerrado este día.');
             return false;
         }
         
-        // Validar fecha pasada
         if (fechaStr < hoy) {
             alert('❌ No se pueden crear reservas en fechas pasadas');
             return false;
         }
         
-        // Validar si el profesional trabaja este día
         if (filtroProfesional !== 'todos') {
             const fecha = new Date(fechaStr);
             const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
@@ -258,11 +255,9 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
                 const diaSemana = diasSemana[fecha.getDay()];
                 
-                // Días cerrados del local
                 if (diasCerradosFechas.includes(fechaStr)) {
                     return ['dia-cerrado'];
                 }
-                // Días que el profesional no trabaja
                 if (filtroProfesional !== 'todos' && diasNoLaborables.includes(diaSemana)) {
                     return ['dia-no-laborable'];
                 }
@@ -280,9 +275,9 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 calendarApiRef.current = null;
             }
         };
-    }, []); // ← Solo se ejecuta UNA VEZ al montar el componente
+    }, []);
 
-    // Actualizar eventos cuando cambian las reservas (sin destruir el calendario)
+    // Actualizar eventos cuando cambian las reservas
     React.useEffect(() => {
         if (!calendarApiRef.current) return;
         
@@ -341,29 +336,27 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         
         setEventosCargados(true);
         
-    }, [bookings, filtroProfesional, filtroServicio]); // ← Dependencias correctas
+    }, [bookings, filtroProfesional, filtroServicio]);
 
     // Actualizar estilos de días cuando cambian los días no laborables
     React.useEffect(() => {
         if (!calendarApiRef.current) return;
-        
-        // Refrescar la vista para que se apliquen los nuevos estilos
         calendarApiRef.current.refetchEvents();
         console.log('🔄 Calendario refrescado - Días no laborables actualizados');
-        
     }, [diasNoLaborables, diasCerradosFechas]);
 
-    if (loading) {
-        return (
-            <div className="bg-white rounded-xl shadow-sm p-6 text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto"></div>
-                <p className="text-gray-500 mt-4">Cargando calendario...</p>
-            </div>
-        );
-    }
+    // ELIMINAMOS EL RETURN TEMPRANO DE loading - USAMOS OVERLAY
 
     return (
-        <div className="bg-white rounded-xl shadow-sm p-2 animate-fade-in">
+        <div className="bg-white rounded-xl shadow-sm p-2 animate-fade-in relative">
+            {/* OVERLAY DE CARGA - Superpuesto sin destruir el calendario */}
+            {loading && (
+                <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-50 flex flex-col items-center justify-center rounded-xl transition-all">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto shadow-sm"></div>
+                    <p className="text-pink-700 font-medium mt-3 text-sm bg-white/80 px-3 py-1 rounded-full shadow-sm">Actualizando reservas...</p>
+                </div>
+            )}
+
             <div className="text-xs text-gray-400 text-center mb-2 flex justify-center gap-4 flex-wrap">
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500"></div><span>Reservado</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div><span>Pendiente</span></div>
@@ -376,13 +369,15 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                     </div>
                 )}
             </div>
+            
             <div ref={calendarRef} style={{ minHeight: '450px' }}></div>
-            {!eventosCargados && bookings.length > 0 && (
+            
+            {!eventosCargados && bookings.length > 0 && !loading && (
                 <div className="text-center py-2 text-yellow-600 text-sm">Cargando eventos...</div>
             )}
         </div>
     );
-}
+} // ← ESTA LLAVE DE CIERRE ES LA QUE FALTABA
 // ============================================
 // COMPONENTE ListaDeReservas (Vista Lista Original)
 // ============================================
