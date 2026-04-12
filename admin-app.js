@@ -1,7 +1,7 @@
-﻿// admin-app.js - Panel de administración (VERSIÓN COMPLETA CON CALENDARIO OPTIMIZADO Y FILTROS)
-// CON BOTÓN DE NUEVA RESERVA MANUAL, CALENDARIO DE DISPONIBILIDAD Y VISTA CALENDARIO
+﻿// admin-app.js - Panel de administración (VERSIÓN DEFINITIVA - CLOSURES Y BLOQUEOS CORREGIDOS)
+// Optimizaciones: Bloqueo Estricto FullCalendar, Normalización de días, Fix de Stale Closures.
 
-console.log('🚀 ADMIN-APP.JS - Panel completo con Calendario Optimizado y Filtros');
+console.log('🚀 ADMIN-APP.JS - Versión de Ingeniería Senior v3.0');
 
 window.addEventListener('error', function(e) {
     console.error('❌ Error detectado:', e.message);
@@ -15,7 +15,7 @@ window.addEventListener('error', function(e) {
 });
 
 // ============================================
-// FUNCIÓN PARA OBTENER NEGOCIO_ID
+// FUNCIONES DE UTILIDAD (ZONA GLOBAL)
 // ============================================
 function getNegocioId() {
     const localId = localStorage.getItem('negocioId');
@@ -25,8 +25,11 @@ function getNegocioId() {
     return null;
 }
 
-// Utilidad global para evitar errores por tildes o mayúsculas al comparar días
-const normalizarTexto = (texto) => texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+// Utilidad global implacable para evitar errores por tildes o mayúsculas al comparar días
+const normalizarTexto = (texto) => {
+    if (!texto) return "";
+    return texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+};
 
 // ============================================
 // FUNCIONES DE SUPABASE
@@ -97,9 +100,6 @@ async function createBooking(bookingData) {
     }
 }
 
-// ============================================
-// FUNCIÓN PARA MARCAR TURNOS COMO COMPLETADOS
-// ============================================
 async function marcarTurnosCompletados() {
     try {
         const negocioId = getNegocioId();
@@ -139,9 +139,6 @@ async function marcarTurnosCompletados() {
     }
 }
 
-// ============================================
-// FUNCIONES AUXILIARES
-// ============================================
 const timeToMinutes = (time) => { const [h,m] = time.split(':').map(Number); return h*60+m; };
 const formatTo12Hour = (time) => { const [h,m] = time.split(':'); const hour = parseInt(h); const ampm = hour>=12?'PM':'AM'; const h12 = hour%12||12; return `${h12}:${m} ${ampm}`; };
 const calculateEndTime = (startTime, duration) => { const [h,m] = startTime.split(':').map(Number); const total = h*60+m+duration; return `${Math.floor(total/60).toString().padStart(2,'0')}:${(total%60).toString().padStart(2,'0')}`; };
@@ -149,21 +146,21 @@ const getCurrentLocalDate = () => { const ahora = new Date(); return `${ahora.ge
 const indiceToHoraLegible = (indice) => { const horas = Math.floor(indice/2); const minutos = indice%2===0?'00':'30'; return `${horas.toString().padStart(2,'0')}:${minutos}`; };
 
 // ============================================
-// COMPONENTE AdminCalendar (VERSIÓN DEFINITIVA - NO SE PIERDE Y BLOQUEA DÍAS)
+// COMPONENTE AdminCalendar (EL CALENDARIO GRANDE)
 // ============================================
-function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerradosFechas = [], filtroProfesional = 'todos', filtroServicio = 'todos', profesionalesList = [], serviciosList = [] }) {
+function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerradosFechas = [], filtroProfesional = 'todos', filtroServicio = 'todos', profesionalesList = [], fechasConHorarios = {} }) {
     const calendarRef = React.useRef(null);
     const calendarApiRef = React.useRef(null);
     const [eventosCargados, setEventosCargados] = React.useState(false);
     const [diasNoLaborables, setDiasNoLaborables] = React.useState([]);
-    const [horariosPorDia, setHorariosPorDia] = React.useState({});
 
-    // Cargar horarios del profesional para saber qué días trabaja
+    // 1. REF MÁGICO: Rompe el closure de React. Siempre tiene la data fresca sin reiniciar el calendario.
+    const datosReales = React.useRef({ filtroProfesional, diasNoLaborables, fechasConHorarios, diasCerradosFechas });
+
     React.useEffect(() => {
         const cargarHorariosProfesional = async () => {
             if (filtroProfesional === 'todos' || !profesionalesList.length) {
                 setDiasNoLaborables([]);
-                setHorariosPorDia({});
                 return;
             }
             
@@ -173,44 +170,98 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             try {
                 const horarios = await window.salonConfig.getHorariosProfesional(profesional.id);
                 const horariosPorDiaObj = horarios.horariosPorDia || {};
-                setHorariosPorDia(horariosPorDiaObj);
                 
-                // Determinar qué días NO trabaja (sin horarios configurados)
                 const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-                const noTrabaja = diasSemana.filter(dia => !horariosPorDiaObj[dia] || horariosPorDiaObj[dia].length === 0);
-                setDiasNoLaborables(noTrabaja);
                 
-                console.log(`📅 Horarios de ${profesional.nombre}:`, horariosPorDiaObj);
-                console.log(`📅 Días que NO trabaja:`, noTrabaja);
+                // Determinamos los días que NO trabaja normalizando el texto
+                const noTrabaja = diasSemana.filter(dia => {
+                    const diaNorm = normalizarTexto(dia);
+                    // Buscamos en el objeto original si existe la clave normalizada
+                    const slots = horariosPorDiaObj[dia] || horariosPorDiaObj[diaNorm];
+                    return !slots || slots.length === 0;
+                });
+                
+                setDiasNoLaborables(noTrabaja);
             } catch (error) {
                 console.error('Error cargando horarios:', error);
             }
         };
-        
         cargarHorariosProfesional();
     }, [filtroProfesional, profesionalesList]);
 
-    // Función silenciosa para verificar si se puede clickear una fecha en el calendario grande
-    const esFechaValidaParaCita = (fechaStr, dateObj) => {
-        const hoy = getCurrentLocalDate();
-        if (fechaStr < hoy) return false;
-        if (diasCerradosFechas.includes(fechaStr)) return false;
+    // 2. MANTENEMOS EL REF ACTUALIZADO Y FORZAMOS EL REPINTADO DE CELDAS
+    React.useEffect(() => {
+        datosReales.current = { filtroProfesional, diasNoLaborables, fechasConHorarios, diasCerradosFechas };
         
-        if (filtroProfesional !== 'todos') {
+        if (calendarApiRef.current) {
+            // Este es el truco maestro para FullCalendar: Reasignar la clase fuerza un repintado inmediato
+            calendarApiRef.current.setOption('dayCellClassNames', getDayCellClassNames);
+        }
+    }, [filtroProfesional, diasNoLaborables, fechasConHorarios, diasCerradosFechas]);
+
+    // Función de cálculo de clases visuales (Usa el Ref Mágico)
+    const getDayCellClassNames = (arg) => {
+        const datos = datosReales.current;
+        const year = arg.date.getFullYear();
+        const month = String(arg.date.getMonth() + 1).padStart(2, '0');
+        const day = String(arg.date.getDate()).padStart(2, '0');
+        const fechaStr = `${year}-${month}-${day}`;
+        
+        const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+        const diaSemana = diasSemana[arg.date.getDay()];
+        const diaNorm = normalizarTexto(diaSemana);
+        const hoy = getCurrentLocalDate();
+        
+        const clases = [];
+        
+        if (fechaStr < hoy) {
+            clases.push('bg-gray-50', 'opacity-50', 'pointer-events-none');
+        } else if (datos.diasCerradosFechas.includes(fechaStr)) {
+            clases.push('bg-red-50', 'opacity-50', 'pointer-events-none');
+        } else if (datos.filtroProfesional !== 'todos') {
+            const noLabNorm = datos.diasNoLaborables.map(normalizarTexto);
+            
+            if (noLabNorm.includes(diaNorm)) {
+                // BLOQUEO ABSOLUTO PARA FULLCALENDAR (No clickeable, gris)
+                clases.push('bg-gray-200', 'opacity-60', 'pointer-events-none', 'cursor-not-allowed');
+            } else if (datos.fechasConHorarios[fechaStr] === true) {
+                // DÍA CON CUPOS (Verde suave)
+                clases.push('bg-green-50', 'hover:bg-green-100', 'cursor-pointer');
+            } else if (datos.fechasConHorarios[fechaStr] === false) {
+                // DÍA SIN CUPOS (Bloqueado)
+                clases.push('bg-red-50', 'opacity-80', 'pointer-events-none');
+            }
+        } else {
+            clases.push('hover:bg-pink-50', 'cursor-pointer');
+        }
+        
+        return clases;
+    };
+
+    // Función silenciosa para validar el click (Usa el Ref Mágico)
+    const esFechaValidaParaCita = (fechaStr, dateObj) => {
+        const datos = datosReales.current;
+        const hoy = getCurrentLocalDate();
+        
+        if (fechaStr < hoy) return false;
+        if (datos.diasCerradosFechas.includes(fechaStr)) return false;
+        
+        if (datos.filtroProfesional !== 'todos') {
             const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
             const diaSemana = diasSemana[dateObj.getDay()];
-            if (diasNoLaborables.includes(diaSemana)) {
-                return false; 
-            }
+            const diaNorm = normalizarTexto(diaSemana);
+            const noLabNorm = datos.diasNoLaborables.map(normalizarTexto);
+            
+            if (noLabNorm.includes(diaNorm)) return false; 
+            
+            if (datos.fechasConHorarios[fechaStr] === false) return false;
         }
         return true;
     };
 
-    // Inicializar calendario UNA SOLA VEZ
+    // 3. Inicializar calendario UNA SOLA VEZ
     React.useEffect(() => {
         if (!calendarRef.current || calendarApiRef.current) return;
-        
-        console.log('📅 INICIALIZANDO CALENDARIO (una sola vez)...');
         
         const cal = new FullCalendar.Calendar(calendarRef.current, {
             locale: 'es',
@@ -225,7 +276,6 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 onEventClick(info.event);
             },
             dateClick: (info) => {
-                // Extraer la fecha segura (evitando UTC bugs)
                 const year = info.date.getFullYear();
                 const month = String(info.date.getMonth() + 1).padStart(2, '0');
                 const day = String(info.date.getDate()).padStart(2, '0');
@@ -244,39 +294,11 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             slotLabelInterval: '01:00',
             lazyFetching: true,
             dayMaxEvents: 3,
-            dayCellClassNames: (arg) => {
-                const year = arg.date.getFullYear();
-                const month = String(arg.date.getMonth() + 1).padStart(2, '0');
-                const day = String(arg.date.getDate()).padStart(2, '0');
-                const fechaStr = `${year}-${month}-${day}`;
-                
-                const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-                const diaSemana = diasSemana[arg.date.getDay()];
-                const hoy = getCurrentLocalDate();
-                
-                const clases = [];
-                
-                if (fechaStr < hoy) {
-                    clases.push('bg-gray-50', 'opacity-50', 'pointer-events-none');
-                } else if (diasCerradosFechas.includes(fechaStr)) {
-                    clases.push('bg-red-50', 'opacity-50', 'pointer-events-none');
-                } else if (filtroProfesional !== 'todos') {
-                    if (diasNoLaborables.includes(diaSemana)) {
-                        // BLOQUEO ABSOLUTO PARA FULLCALENDAR (No clickeable)
-                        clases.push('bg-gray-200', 'opacity-60', 'pointer-events-none');
-                    } else {
-                        // VERDE SUAVE para los días que SÍ trabaja el profesional
-                        clases.push('bg-green-50');
-                    }
-                }
-                
-                return clases;
-            }
+            dayCellClassNames: getDayCellClassNames // Usamos la función referenciada
         });
         
         cal.render();
         calendarApiRef.current = cal;
-        console.log('✅ Calendario inicializado');
         
         return () => {
             if (calendarApiRef.current) {
@@ -286,15 +308,11 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         };
     }, []);
 
-    // Actualizar eventos cuando cambian las reservas (sin destruir el calendario)
+    // 4. Actualizar eventos cuando cambian las reservas
     React.useEffect(() => {
         if (!calendarApiRef.current) return;
         
-        console.log('🔄 Actualizando eventos del calendario - Reservas:', bookings.length);
-        
-        let reservasActivas = bookings.filter(b => 
-            b.estado === 'Reservado' || b.estado === 'Pendiente'
-        );
+        let reservasActivas = bookings.filter(b => b.estado === 'Reservado' || b.estado === 'Pendiente');
         
         if (filtroProfesional !== 'todos') {
             reservasActivas = reservasActivas.filter(b => 
@@ -305,15 +323,12 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         }
         
         if (filtroServicio !== 'todos') {
-            reservasActivas = reservasActivas.filter(b => 
-                b.servicio === filtroServicio
-            );
+            reservasActivas = reservasActivas.filter(b => b.servicio === filtroServicio);
         }
         
         const events = reservasActivas.map(booking => {
             let backgroundColor = '#10B981';
             if (booking.estado === 'Pendiente') backgroundColor = '#F59E0B';
-            
             const profesional = booking.profesional_nombre || booking.trabajador_nombre || 'No asignado';
             
             return {
@@ -323,18 +338,7 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 end: `${booking.fecha}T${booking.hora_fin}`,
                 backgroundColor: backgroundColor,
                 borderColor: backgroundColor,
-                extendedProps: {
-                    cliente_nombre: booking.cliente_nombre,
-                    cliente_whatsapp: booking.cliente_whatsapp,
-                    servicio: booking.servicio,
-                    profesional_nombre: profesional,
-                    profesional_id: booking.profesional_id,
-                    estado: booking.estado,
-                    fecha: booking.fecha,
-                    hora_inicio: booking.hora_inicio,
-                    hora_fin: booking.hora_fin,
-                    id: booking.id
-                }
+                extendedProps: { ...booking, profesional_nombre: profesional }
             };
         });
         
@@ -342,21 +346,11 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         if (events.length > 0) {
             calendarApiRef.current.addEventSource(events);
         }
-        
         setEventosCargados(true);
-        
     }, [bookings, filtroProfesional, filtroServicio]);
-
-    // Actualizar estilos de días cuando cambian los días no laborables
-    React.useEffect(() => {
-        if (!calendarApiRef.current) return;
-        calendarApiRef.current.refetchEvents();
-    }, [diasNoLaborables, diasCerradosFechas]);
 
     return (
         <div className="bg-white rounded-xl shadow-sm p-2 animate-fade-in relative">
-            
-            {/* OVERLAY DE CARGA - Superpuesto sin destruir el calendario */}
             {loading && (
                 <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] z-50 flex flex-col items-center justify-center rounded-xl transition-all">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto shadow-sm"></div>
@@ -365,9 +359,9 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             )}
 
             <div className="text-xs text-gray-400 text-center mb-2 flex justify-center gap-4 flex-wrap">
-                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500"></div><span>Reservado</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500"></div><span>Confirmado</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div><span>Pendiente</span></div>
-                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>Día Cerrado</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>Día Cerrado / Lleno</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-300"></div><span>No laborable</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-200"></div><span>Disponible</span></div>
             </div>
@@ -653,7 +647,14 @@ function AdminApp() {
                 let diaSemana = diasSemana[fechaSeleccionada.getDay()];
                 
                 diaSemana = normalizarTexto(diaSemana);
-                const indicesDelDia = horariosPorDia[diaSemana] || [];
+                
+                // Normalizamos también las claves del objeto
+                const horariosNormalizados = {};
+                for (const [key, value] of Object.entries(horariosPorDia)) {
+                    horariosNormalizados[normalizarTexto(key)] = value;
+                }
+                
+                const indicesDelDia = horariosNormalizados[diaSemana] || [];
                 
                 if (indicesDelDia.length === 0) {
                     setHorariosDisponibles([]);
@@ -718,7 +719,58 @@ function AdminApp() {
         cargarHorarios();
     }, [nuevaReservaData.profesional_id, nuevaReservaData.fecha, nuevaReservaData.servicio, serviciosList]);
 
-    // CARGAR DISPONIBILIDAD CON LÓGICA ROBUSTA
+    // ============================================
+    // ACTUALIZAR MAPA DE DISPONIBILIDAD GLOBAL
+    // ============================================
+    const actualizarMapaDisponibilidad = async (fechaBase, profId) => {
+        try {
+            const horarios = await window.salonConfig.getHorariosProfesional(profId);
+            const horariosPorDiaBruto = horarios.horariosPorDia || {};
+            
+            // NORMALIZAR CLAVES (ej: "Miércoles" -> "miercoles")
+            const horariosPorDia = {};
+            for (const [key, value] of Object.entries(horariosPorDiaBruto)) {
+                horariosPorDia[normalizarTexto(key)] = value;
+            }
+
+            const year = fechaBase.getFullYear();
+            const month = fechaBase.getMonth();
+            const ultimoDia = new Date(year, month + 1, 0).getDate();
+            
+            const mapa = {};
+            const nombresDias = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+
+            for (let d = 1; d <= ultimoDia; d++) {
+                const actual = new Date(year, month, d);
+                const fechaStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
+                
+                const diaSemana = nombresDias[actual.getDay()];
+                const diaNorm = normalizarTexto(diaSemana);
+                
+                const slots = horariosPorDia[diaNorm] || [];
+                
+                if (slots.length === 0) {
+                    mapa[fechaStr] = false;
+                    continue;
+                }
+
+                const reservasDia = bookings.filter(b => b.fecha === fechaStr && b.profesional_id == profId && b.estado !== 'Cancelado');
+                mapa[fechaStr] = reservasDia.length < slots.length;
+            }
+            setFechasConHorarios(mapa);
+        } catch (e) { console.error(e); }
+    };
+
+    // Refrescar mapa cuando cambian las reservas
+    React.useEffect(() => {
+        if (filtroProfesional !== 'todos') {
+            actualizarMapaDisponibilidad(new Date(), filtroProfesional);
+        }
+    }, [bookings, filtroProfesional]);
+
+    // ============================================
+    // FUNCIONES DE DISPONIBILIDAD (MODAL MÁS INFO)
+    // ============================================
     const cargarDisponibilidadMes = async (fecha, profesionalId) => {
         if (!profesionalId) return;
         
@@ -775,7 +827,13 @@ function AdminApp() {
                 const diaSemana = nombresDias[fechaActual.getDay()];
                 const diaNormalizado = normalizarTexto(diaSemana);
                 
-                const horariosDelDia = horariosPorDia[diaNormalizado] || [];
+                // Normalizar objeto interno
+                const horariosNormalizados = {};
+                for (const [key, value] of Object.entries(horariosPorDia)) {
+                    horariosNormalizados[normalizarTexto(key)] = value;
+                }
+                
+                const horariosDelDia = horariosNormalizados[diaNormalizado] || [];
                 
                 if (horariosDelDia.length === 0) {
                     disponibilidad[fechaStr] = false;
@@ -883,7 +941,12 @@ function AdminApp() {
                 const diaSemana = nombresDias[fechaActual.getDay()];
                 const diaNormalizado = normalizarTexto(diaSemana);
                 
-                const horariosDelDia = horariosPorDia[diaNormalizado] || [];
+                const horariosNormalizados = {};
+                for (const [key, value] of Object.entries(horariosPorDia)) {
+                    horariosNormalizados[normalizarTexto(key)] = value;
+                }
+                
+                const horariosDelDia = horariosNormalizados[diaNormalizado] || [];
                 
                 if (horariosDelDia.length === 0) {
                     disponibilidad[fechaStr] = false;
@@ -1693,7 +1756,7 @@ function AdminApp() {
                                 filtroProfesional={filtroProfesional}
                                 filtroServicio={filtroServicio}
                                 profesionalesList={profesionalesList}
-                                serviciosList={serviciosList}
+                                fechasConHorarios={fechasConHorarios}
                             />
                         ) : (
                             <ListaDeReservas 
