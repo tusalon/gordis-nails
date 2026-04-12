@@ -43,6 +43,22 @@
             cursor: pointer !important;
         }
         
+        /* Asegurar que el calendario tenga altura y sea visible */
+        .fc {
+            min-height: 500px !important;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
+        .fc-view-harness {
+            min-height: 400px !important;
+        }
+        
+        .fc .fc-view {
+            min-height: 400px !important;
+        }
+        
         /* Estilo para días cerrados en el calendario */
         .dia-cerrado {
             background-color: #fee2e2 !important;
@@ -63,6 +79,17 @@
             background-color: #fef2f2;
         }
         
+        /* Estilo para días no laborables (profesional no trabaja) */
+        .dia-no-laborable {
+            background-color: #f3f4f6 !important;
+            opacity: 0.5;
+            cursor: not-allowed !important;
+        }
+        
+        .dia-no-laborable .fc-daygrid-day-number {
+            color: #9ca3af !important;
+        }
+        
         /* Animación */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -74,6 +101,12 @@
         
         /* Mejoras responsive para el calendario */
         @media (max-width: 768px) {
+            .fc {
+                min-height: 400px !important;
+            }
+            .fc-view-harness {
+                min-height: 300px !important;
+            }
             .fc .fc-toolbar {
                 flex-direction: column;
                 gap: 10px;
