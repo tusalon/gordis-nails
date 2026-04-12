@@ -146,7 +146,7 @@ const getCurrentLocalDate = () => { const ahora = new Date(); return `${ahora.ge
 const indiceToHoraLegible = (indice) => { const horas = Math.floor(indice/2); const minutos = indice%2===0?'00':'30'; return `${horas.toString().padStart(2,'0')}:${minutos}`; };
 
 // ============================================
-// COMPONENTE AdminCalendar (VERSIÓN DEFINITIVA - CON VALIDACIÓN DE DÍAS NO LABORABLES)
+// COMPONENTE AdminCalendar (VERSIÓN CORREGIDA - DÍAS CERRADOS Y NO LABORABLES VISIBLES)
 // ============================================
 function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerradosFechas = [], filtroProfesional = 'todos', filtroServicio = 'todos', profesionalesList = [], serviciosList = [] }) {
     const calendarRef = React.useRef(null);
@@ -165,13 +165,18 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             const profesional = profesionalesList.find(p => p.id == filtroProfesional);
             if (!profesional) return;
             
-            const horarios = await window.salonConfig.getHorariosProfesional(profesional.id);
-            const horariosPorDia = horarios.horariosPorDia || {};
-            
-            // Determinar qué días NO trabaja
-            const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-            const noTrabaja = diasSemana.filter(dia => !horariosPorDia[dia] || horariosPorDia[dia].length === 0);
-            setDiasNoLaborables(noTrabaja);
+            try {
+                const horarios = await window.salonConfig.getHorariosProfesional(profesional.id);
+                const horariosPorDia = horarios.horariosPorDia || {};
+                
+                // Determinar qué días NO trabaja
+                const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+                const noTrabaja = diasSemana.filter(dia => !horariosPorDia[dia] || horariosPorDia[dia].length === 0);
+                setDiasNoLaborables(noTrabaja);
+                console.log(`📅 Días que ${profesional.nombre} NO trabaja:`, noTrabaja);
+            } catch (error) {
+                console.error('Error cargando días no laborables:', error);
+            }
         };
         
         cargarDiasNoLaborables();
@@ -193,6 +198,8 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             }
             
             console.log('📅 INICIALIZANDO CALENDARIO...');
+            console.log('📅 Días cerrados del local:', diasCerradosFechas);
+            console.log('📅 Días no laborables del profesional:', diasNoLaborables);
             
             const cal = new FullCalendar.Calendar(calendarRef.current, {
                 locale: 'es',
@@ -206,18 +213,20 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 eventClick: (info) => {
                     onEventClick(info.event);
                 },
-                dateClick: async (info) => {
+                dateClick: (info) => {
                     const fechaStr = info.dateStr.split('T')[0];
                     const fecha = new Date(fechaStr);
                     const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
                     const diaSemana = diasSemana[fecha.getDay()];
                     const hoy = getCurrentLocalDate();
                     
+                    // Validar día cerrado por el local
                     if (diasCerradosFechas.includes(fechaStr)) {
-                        alert('❌ El local está cerrado este día.');
+                        alert('❌ El local está cerrado este día. No se pueden crear reservas.');
                         return;
                     }
                     
+                    // Validar fecha pasada
                     if (fechaStr < hoy) {
                         alert('❌ No se pueden crear reservas en fechas pasadas');
                         return;
@@ -249,10 +258,12 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                     const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
                     const diaSemana = diasSemana[fecha.getDay()];
                     
+                    // Prioridad: días cerrados del local
                     if (diasCerradosFechas.includes(fechaStr)) {
                         return ['dia-cerrado'];
                     }
-                    if (diasNoLaborables.includes(diaSemana) && filtroProfesional !== 'todos') {
+                    // Días que el profesional no trabaja
+                    if (filtroProfesional !== 'todos' && diasNoLaborables.includes(diaSemana)) {
                         return ['dia-no-laborable'];
                     }
                     return [];
@@ -273,9 +284,9 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 } catch(e) {}
             }
         };
-    }, []);
+    }, [diasCerradosFechas, diasNoLaborables]);
 
-    // Actualizar eventos - SIN destruir el calendario
+    // Actualizar eventos - solo cuando cambian las reservas o filtros
     React.useEffect(() => {
         if (!calendar) {
             console.log('⏳ Calendario no disponible para eventos');
@@ -341,9 +352,10 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         
         setEventosCargados(true);
         
+        // Forzar redimensionamiento
         setTimeout(() => {
             if (calendar) calendar.updateSize();
-        }, 50);
+        }, 100);
         
     }, [bookings, calendar, filtroProfesional, filtroServicio]);
 
@@ -361,8 +373,8 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             <div className="text-xs text-gray-400 text-center mb-2 flex justify-center gap-4 flex-wrap">
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500"></div><span>Reservado</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div><span>Pendiente</span></div>
-                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>Día Cerrado</span></div>
-                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-300"></div><span>No laborable</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>Día Cerrado (Local)</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-300"></div><span>No laborable (Profesional)</span></div>
                 {(filtroProfesional !== 'todos' || filtroServicio !== 'todos') && (
                     <div className="flex items-center gap-1 ml-4">
                         <span className="text-pink-500">🔍</span>
