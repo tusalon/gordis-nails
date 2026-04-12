@@ -218,8 +218,6 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         
         for (const prof of datos.profesionalesList) {
             if (!prof.activo) continue;
-            // Simplificado: si hay profesionales, asumimos que podrían tener disponibilidad
-            // La validación real se hace con fechasConHorarios
             return true;
         }
         return datos.profesionalesList.length > 0;
@@ -1087,7 +1085,195 @@ function AdminApp() {
     };
 
     // ============================================
-    // NUEVA FUNCIÓN: PANEL DE INFO DEL TURNO
+    // FUNCIÓN CORREGIDA: SELECCIÓN AUTOMÁTICA DE PROFESIONAL
+    // ============================================
+    const seleccionarProfesionalConDisponibilidad = async (fechaSeleccionada) => {
+        const profesionalesConDisponibilidad = [];
+        
+        for (const prof of profesionalesList) {
+            if (!prof.activo) continue;
+            
+            try {
+                // Obtener horarios del profesional
+                const horarios = await window.salonConfig.getHorariosProfesional(prof.id);
+                const horariosPorDia = horarios.horariosPorDia || {};
+                
+                const fecha = new Date(fechaSeleccionada);
+                const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+                const diaSemana = diasSemana[fecha.getDay()];
+                const diaNorm = normalizarTexto(diaSemana);
+                
+                // Normalizar claves del objeto horariosPorDia
+                const horariosNormalizados = {};
+                for (const [key, value] of Object.entries(horariosPorDia)) {
+                    horariosNormalizados[normalizarTexto(key)] = value;
+                }
+                
+                const slotsDelDia = horariosNormalizados[diaNorm] || [];
+                
+                // Si no tiene horarios configurados este día, no está disponible
+                if (slotsDelDia.length === 0) {
+                    continue;
+                }
+                
+                // Obtener reservas existentes para este profesional en esta fecha
+                const response = await fetch(
+                    `${window.SUPABASE_URL}/rest/v1/reservas?fecha=eq.${fechaSeleccionada}&profesional_id=eq.${prof.id}&estado=neq.Cancelado&select=hora_inicio,hora_fin`,
+                    {
+                        headers: {
+                            'apikey': window.SUPABASE_ANON_KEY,
+                            'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
+                        }
+                    }
+                );
+                const reservas = await response.json();
+                
+                // Verificar si tiene al menos un horario libre
+                let tieneHorarioLibre = false;
+                for (const slotIndice of slotsDelDia) {
+                    const slotStr = indiceToHoraLegible(slotIndice);
+                    const slotStart = timeToMinutes(slotStr);
+                    const slotEnd = slotStart + 60;
+                    
+                    const ocupado = reservas.some(reserva => {
+                        const rStart = timeToMinutes(reserva.hora_inicio);
+                        const rEnd = timeToMinutes(reserva.hora_fin);
+                        return (slotStart < rEnd && slotEnd > rStart);
+                    });
+                    
+                    if (!ocupado) {
+                        tieneHorarioLibre = true;
+                        break;
+                    }
+                }
+                
+                if (tieneHorarioLibre) {
+                    profesionalesConDisponibilidad.push(prof);
+                }
+            } catch (error) {
+                console.error(`Error verificando disponibilidad para ${prof.nombre}:`, error);
+            }
+        }
+        
+        console.log(`📅 Profesionales con disponibilidad para ${fechaSeleccionada}:`, profesionalesConDisponibilidad.length);
+        return profesionalesConDisponibilidad;
+    };
+
+    // ============================================
+    // FUNCIÓN MEJORADA PARA CLICK EN FECHA
+    // ============================================
+    const handleCalendarDateSelect = async (dateStr) => {
+        const fechaSeleccionada = dateStr.split('T')[0];
+        const hoy = getCurrentLocalDate();
+        
+        if (fechaSeleccionada < hoy) {
+            alert('❌ No se pueden crear reservas en fechas pasadas');
+            return;
+        }
+        
+        if (diasCerradosFechas.includes(fechaSeleccionada)) {
+            alert('❌ El local está cerrado este día. No se pueden crear reservas.');
+            return;
+        }
+        
+        // Mostrar mensaje de carga
+        const loadingMsg = document.createElement('div');
+        loadingMsg.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4';
+        loadingMsg.innerHTML = `
+            <div class="bg-white rounded-xl p-6 flex flex-col items-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500 mb-3"></div>
+                <p class="text-gray-600">Verificando disponibilidad...</p>
+            </div>
+        `;
+        document.body.appendChild(loadingMsg);
+        
+        try {
+            const profesionalesDisponibles = await seleccionarProfesionalConDisponibilidad(fechaSeleccionada);
+            loadingMsg.remove();
+            
+            if (profesionalesDisponibles.length === 0) {
+                alert('❌ No hay profesionales con disponibilidad para este día.\n\nPosibles causas:\n- El profesional no trabaja este día\n- Todos los horarios están ocupados\n- El día está marcado como no laborable');
+                return;
+            }
+            
+            if (profesionalesDisponibles.length === 1) {
+                setNuevaReservaData({
+                    ...nuevaReservaData,
+                    fecha: fechaSeleccionada,
+                    profesional_id: profesionalesDisponibles[0].id
+                });
+                setShowNuevaReservaModal(true);
+                return;
+            }
+            
+            // Múltiples profesionales: mostrar selector
+            const profesionalOptions = profesionalesDisponibles.map(p => 
+                `<option value="${p.id}">${escapeHtml(p.nombre)} - ${escapeHtml(p.especialidad)}</option>`
+            ).join('');
+            
+            const modalContainer = document.createElement('div');
+            modalContainer.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in';
+            modalContainer.innerHTML = `
+                <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+                    <div class="text-center mb-4">
+                        <div class="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                            <span class="text-3xl">👩‍🎨</span>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-800">Seleccionar Profesional</h3>
+                        <p class="text-gray-500 text-sm mt-1">Varios profesionales tienen disponibilidad para el ${fechaSeleccionada}</p>
+                    </div>
+                    
+                    <select id="profesionalSelect" class="w-full border rounded-lg px-4 py-3 mb-6">
+                        ${profesionalOptions}
+                    </select>
+                    
+                    <div class="flex gap-3">
+                        <button id="btnConfirmar" class="flex-1 bg-pink-500 text-white py-3 rounded-xl font-semibold hover:bg-pink-600 transition">
+                            ✅ Confirmar
+                        </button>
+                        <button id="btnCancelar" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-300 transition">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modalContainer);
+            
+            const btnConfirmar = modalContainer.querySelector('#btnConfirmar');
+            const btnCancelar = modalContainer.querySelector('#btnCancelar');
+            const selectProf = modalContainer.querySelector('#profesionalSelect');
+            
+            btnConfirmar.addEventListener('click', () => {
+                const profId = selectProf.value;
+                setNuevaReservaData({
+                    ...nuevaReservaData,
+                    fecha: fechaSeleccionada,
+                    profesional_id: profId
+                });
+                setShowNuevaReservaModal(true);
+                modalContainer.remove();
+            });
+            
+            btnCancelar.addEventListener('click', () => {
+                modalContainer.remove();
+            });
+            
+            modalContainer.addEventListener('click', (e) => {
+                if (e.target === modalContainer) {
+                    modalContainer.remove();
+                }
+            });
+            
+        } catch (error) {
+            loadingMsg.remove();
+            console.error('Error al verificar disponibilidad:', error);
+            alert('❌ Error al verificar disponibilidad. Intenta de nuevo.');
+        }
+    };
+
+    // ============================================
+    // FUNCIÓN PARA PANEL DE INFO DEL TURNO
     // ============================================
     const mostrarPanelInfoTurno = (data, eventId) => {
         const modalContainer = document.createElement('div');
@@ -1160,161 +1346,6 @@ function AdminApp() {
         });
         
         btnCerrar.addEventListener('click', () => {
-            modalContainer.remove();
-        });
-        
-        modalContainer.addEventListener('click', (e) => {
-            if (e.target === modalContainer) {
-                modalContainer.remove();
-            }
-        });
-    };
-
-    // ============================================
-    // NUEVA FUNCIÓN: SELECCIÓN AUTOMÁTICA DE PROFESIONAL
-    // ============================================
-    const seleccionarProfesionalConDisponibilidad = async (fechaSeleccionada) => {
-        const profesionalesConDisponibilidad = [];
-        
-        for (const prof of profesionalesList) {
-            if (!prof.activo) continue;
-            
-            const horarios = await window.salonConfig.getHorariosProfesional(prof.id);
-            const horariosPorDia = horarios.horariosPorDia || {};
-            
-            const fecha = new Date(fechaSeleccionada);
-            const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-            const diaSemana = diasSemana[fecha.getDay()];
-            const diaNorm = normalizarTexto(diaSemana);
-            
-            const horariosNormalizados = {};
-            for (const [key, value] of Object.entries(horariosPorDia)) {
-                horariosNormalizados[normalizarTexto(key)] = value;
-            }
-            
-            const slotsDelDia = horariosNormalizados[diaNorm] || [];
-            if (slotsDelDia.length === 0) continue;
-            
-            const response = await fetch(
-                `${window.SUPABASE_URL}/rest/v1/reservas?fecha=eq.${fechaSeleccionada}&profesional_id=eq.${prof.id}&estado=neq.Cancelado&select=hora_inicio,hora_fin`,
-                {
-                    headers: {
-                        'apikey': window.SUPABASE_ANON_KEY,
-                        'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
-                    }
-                }
-            );
-            const reservas = await response.json();
-            
-            let tieneHorarioLibre = false;
-            for (const slot of slotsDelDia) {
-                const slotStr = indiceToHoraLegible(slot);
-                const slotStart = timeToMinutes(slotStr);
-                const slotEnd = slotStart + 60;
-                
-                const ocupado = reservas.some(reserva => {
-                    const rStart = timeToMinutes(reserva.hora_inicio);
-                    const rEnd = timeToMinutes(reserva.hora_fin);
-                    return (slotStart < rEnd && slotEnd > rStart);
-                });
-                
-                if (!ocupado) {
-                    tieneHorarioLibre = true;
-                    break;
-                }
-            }
-            
-            if (tieneHorarioLibre) {
-                profesionalesConDisponibilidad.push(prof);
-            }
-        }
-        
-        return profesionalesConDisponibilidad;
-    };
-
-    // ============================================
-    // FUNCIÓN MEJORADA PARA CLICK EN FECHA (CON SELECCIÓN AUTOMÁTICA)
-    // ============================================
-    const handleCalendarDateSelect = async (dateStr) => {
-        const fechaSeleccionada = dateStr.split('T')[0];
-        const hoy = getCurrentLocalDate();
-        
-        if (fechaSeleccionada < hoy) {
-            alert('❌ No se pueden crear reservas en fechas pasadas');
-            return;
-        }
-        
-        if (diasCerradosFechas.includes(fechaSeleccionada)) {
-            alert('❌ El local está cerrado este día. No se pueden crear reservas.');
-            return;
-        }
-        
-        const profesionalesDisponibles = await seleccionarProfesionalConDisponibilidad(fechaSeleccionada);
-        
-        if (profesionalesDisponibles.length === 0) {
-            alert('❌ No hay profesionales con disponibilidad para este día.');
-            return;
-        }
-        
-        if (profesionalesDisponibles.length === 1) {
-            setNuevaReservaData({
-                ...nuevaReservaData,
-                fecha: fechaSeleccionada,
-                profesional_id: profesionalesDisponibles[0].id
-            });
-            setShowNuevaReservaModal(true);
-            return;
-        }
-        
-        const profesionalOptions = profesionalesDisponibles.map(p => 
-            `<option value="${p.id}">${escapeHtml(p.nombre)} - ${escapeHtml(p.especialidad)}</option>`
-        ).join('');
-        
-        const modalContainer = document.createElement('div');
-        modalContainer.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fade-in';
-        modalContainer.innerHTML = `
-            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
-                <div class="text-center mb-4">
-                    <div class="w-16 h-16 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <span class="text-3xl">👩‍🎨</span>
-                    </div>
-                    <h3 class="text-xl font-bold text-gray-800">Seleccionar Profesional</h3>
-                    <p class="text-gray-500 text-sm mt-1">Varios profesionales tienen disponibilidad para el ${fechaSeleccionada}</p>
-                </div>
-                
-                <select id="profesionalSelect" class="w-full border rounded-lg px-4 py-3 mb-6">
-                    ${profesionalOptions}
-                </select>
-                
-                <div class="flex gap-3">
-                    <button id="btnConfirmar" class="flex-1 bg-pink-500 text-white py-3 rounded-xl font-semibold hover:bg-pink-600 transition">
-                        ✅ Confirmar
-                    </button>
-                    <button id="btnCancelar" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-300 transition">
-                        Cancelar
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modalContainer);
-        
-        const btnConfirmar = modalContainer.querySelector('#btnConfirmar');
-        const btnCancelar = modalContainer.querySelector('#btnCancelar');
-        const selectProf = modalContainer.querySelector('#profesionalSelect');
-        
-        btnConfirmar.addEventListener('click', () => {
-            const profId = selectProf.value;
-            setNuevaReservaData({
-                ...nuevaReservaData,
-                fecha: fechaSeleccionada,
-                profesional_id: profId
-            });
-            setShowNuevaReservaModal(true);
-            modalContainer.remove();
-        });
-        
-        btnCancelar.addEventListener('click', () => {
             modalContainer.remove();
         });
         
