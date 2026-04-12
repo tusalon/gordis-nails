@@ -146,98 +146,115 @@ const getCurrentLocalDate = () => { const ahora = new Date(); return `${ahora.ge
 const indiceToHoraLegible = (indice) => { const horas = Math.floor(indice/2); const minutos = indice%2===0?'00':'30'; return `${horas.toString().padStart(2,'0')}:${minutos}`; };
 
 // ============================================
-// COMPONENTE AdminCalendar (VERSIÓN CORREGIDA CON FILTROS)
+// COMPONENTE AdminCalendar (VERSIÓN DEFINITIVA - FUNCIONAL)
 // ============================================
 function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerradosFechas = [], filtroProfesional = 'todos', filtroServicio = 'todos', profesionalesList = [], serviciosList = [] }) {
     const calendarRef = React.useRef(null);
     const [calendar, setCalendar] = React.useState(null);
     const [eventosCargados, setEventosCargados] = React.useState(false);
-    const [reiniciar, setReiniciar] = React.useState(0);
+    const [forceUpdate, setForceUpdate] = React.useState(0);
 
-    // Forzar reinicialización cuando cambia la pestaña
+    // Inicializar calendario - FORZADO con useEffect que se ejecuta después del render
     React.useEffect(() => {
-        if (calendar) {
-            try {
-                calendar.destroy();
-            } catch(e) {}
-            setCalendar(null);
-            setEventosCargados(false);
-        }
-        setReiniciar(prev => prev + 1);
-    }, []);
-
-    // Inicializar calendario
-    React.useEffect(() => {
-        if (!calendarRef.current || calendar) return;
-        
-        console.log('📅 Inicializando calendario. Días cerrados:', diasCerradosFechas.length);
-        
-        const cal = new FullCalendar.Calendar(calendarRef.current, {
-            locale: 'es',
-            initialView: 'timeGridWeek',
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,timeGridWeek,timeGridDay'
-            },
-            editable: false,
-            eventClick: (info) => {
-                console.log('📅 Click en evento:', info.event.id);
-                onEventClick(info.event);
-            },
-            dateClick: (info) => {
-                const fechaStr = info.dateStr.split('T')[0];
-                if (diasCerradosFechas.includes(fechaStr)) {
-                    alert('❌ El local está cerrado este día. No se pueden crear reservas.');
-                    return;
-                }
-                const hoy = getCurrentLocalDate();
-                if (fechaStr < hoy) {
-                    alert('❌ No se pueden crear reservas en fechas pasadas');
-                    return;
-                }
-                console.log('📅 Click en fecha disponible:', fechaStr);
-                onDateSelect(info.dateStr);
-            },
-            height: 'auto',
-            slotMinTime: '08:00:00',
-            slotMaxTime: '16:00:00',
-            allDaySlot: false,
-            nowIndicator: true,
-            slotDuration: '00:30:00',
-            slotLabelInterval: '01:00',
-            lazyFetching: true,
-            dayMaxEvents: 3,
-            dayCellClassNames: (arg) => {
-                const fechaStr = arg.date.toISOString().split('T')[0];
-                if (diasCerradosFechas.includes(fechaStr)) {
-                    return ['dia-cerrado'];
-                }
-                return [];
+        // Esperar a que el DOM esté listo
+        const initCalendar = () => {
+            if (!calendarRef.current) {
+                console.log('⏳ calendarRef no listo, reintentando...');
+                setTimeout(initCalendar, 100);
+                return;
             }
-        });
+            
+            if (calendar) {
+                console.log('✅ Calendario ya inicializado');
+                return;
+            }
+            
+            if (typeof FullCalendar === 'undefined') {
+                console.error('❌ FullCalendar no está cargado');
+                return;
+            }
+            
+            console.log('📅 INICIALIZANDO CALENDARIO...');
+            console.log('📅 Elemento:', calendarRef.current);
+            
+            try {
+                const cal = new FullCalendar.Calendar(calendarRef.current, {
+                    locale: 'es',
+                    initialView: 'timeGridWeek',
+                    headerToolbar: {
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                    },
+                    editable: false,
+                    eventClick: (info) => {
+                        console.log('📅 Click en evento:', info.event.id);
+                        onEventClick(info.event);
+                    },
+                    dateClick: (info) => {
+                        const fechaStr = info.dateStr.split('T')[0];
+                        if (diasCerradosFechas.includes(fechaStr)) {
+                            alert('❌ El local está cerrado este día. No se pueden crear reservas.');
+                            return;
+                        }
+                        const hoy = getCurrentLocalDate();
+                        if (fechaStr < hoy) {
+                            alert('❌ No se pueden crear reservas en fechas pasadas');
+                            return;
+                        }
+                        onDateSelect(info.dateStr);
+                    },
+                    height: 500,
+                    slotMinTime: '08:00:00',
+                    slotMaxTime: '16:00:00',
+                    allDaySlot: false,
+                    nowIndicator: true,
+                    slotDuration: '00:30:00',
+                    slotLabelInterval: '01:00',
+                    lazyFetching: true,
+                    dayMaxEvents: 3,
+                    dayCellClassNames: (arg) => {
+                        const fechaStr = arg.date.toISOString().split('T')[0];
+                        if (diasCerradosFechas.includes(fechaStr)) {
+                            return ['dia-cerrado'];
+                        }
+                        return [];
+                    }
+                });
+                
+                cal.render();
+                setCalendar(cal);
+                console.log('✅ Calendario renderizado correctamente');
+            } catch (error) {
+                console.error('❌ Error creando calendario:', error);
+            }
+        };
         
-        cal.render();
-        setCalendar(cal);
+        initCalendar();
         
         return () => {
-            if (cal) cal.destroy();
+            if (calendar) {
+                try {
+                    calendar.destroy();
+                    console.log('🗑️ Calendario destruido');
+                } catch(e) {}
+            }
         };
-    }, [diasCerradosFechas, reiniciar]);
+    }, [forceUpdate]); // ← Se ejecuta cuando forceUpdate cambia
 
     // Actualizar eventos cuando cambian las reservas o los filtros
     React.useEffect(() => {
-        if (!calendar) return;
+        if (!calendar) {
+            console.log('⏳ Calendario no disponible para eventos');
+            return;
+        }
         
-        console.log('🔄 Actualizando calendario - Reservas totales:', bookings.length);
-        console.log('🔍 Filtro profesional:', filtroProfesional);
-        console.log('🔍 Filtro servicio:', filtroServicio);
+        console.log('🔄 Actualizando eventos - Reservas:', bookings.length);
         
         let reservasActivas = bookings.filter(b => 
             b.estado === 'Reservado' || b.estado === 'Pendiente'
         );
         
-        // Aplicar filtro por profesional
         if (filtroProfesional !== 'todos') {
             reservasActivas = reservasActivas.filter(b => 
                 b.profesional_id == filtroProfesional || 
@@ -246,14 +263,13 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             );
         }
         
-        // Aplicar filtro por servicio
         if (filtroServicio !== 'todos') {
             reservasActivas = reservasActivas.filter(b => 
                 b.servicio === filtroServicio
             );
         }
         
-        console.log('📅 Reservas activas después de filtros:', reservasActivas.length);
+        console.log('📅 Reservas después de filtros:', reservasActivas.length);
         
         const events = reservasActivas.map(booking => {
             let backgroundColor = '#10B981';
@@ -292,7 +308,21 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         
         setEventosCargados(true);
         
+        // Forzar redimensionamiento
+        setTimeout(() => {
+            if (calendar) calendar.updateSize();
+        }, 50);
+        
     }, [bookings, calendar, filtroProfesional, filtroServicio]);
+
+    // Forzar recreación cuando cambian los días cerrados
+    React.useEffect(() => {
+        if (calendar) {
+            calendar.destroy();
+            setCalendar(null);
+            setForceUpdate(prev => prev + 1);
+        }
+    }, [diasCerradosFechas]);
 
     if (loading) {
         return (
@@ -316,7 +346,7 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                     </div>
                 )}
             </div>
-            <div ref={calendarRef}></div>
+            <div ref={calendarRef} style={{ minHeight: '450px' }}></div>
             {!eventosCargados && bookings.length > 0 && (
                 <div className="text-center py-2 text-yellow-600 text-sm">Cargando eventos...</div>
             )}
