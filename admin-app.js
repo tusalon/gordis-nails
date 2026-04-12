@@ -25,6 +25,9 @@ function getNegocioId() {
     return null;
 }
 
+// Utilidad global para evitar errores por tildes o mayúsculas al comparar días
+const normalizarTexto = (texto) => texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
 // ============================================
 // FUNCIONES DE SUPABASE
 // ============================================
@@ -187,24 +190,19 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
         cargarHorariosProfesional();
     }, [filtroProfesional, profesionalesList]);
 
-    // Función silenciosa para verificar si se puede clickear una fecha en el calendario
+    // Función silenciosa para verificar si se puede clickear una fecha en el calendario grande
     const esFechaValidaParaCita = (fechaStr, dateObj) => {
         const hoy = getCurrentLocalDate();
-        
-        // Bloqueo silencioso para fechas pasadas y días cerrados del local
         if (fechaStr < hoy) return false;
         if (diasCerradosFechas.includes(fechaStr)) return false;
         
-        // Bloqueo silencioso si el profesional NO trabaja este día
         if (filtroProfesional !== 'todos') {
             const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
             const diaSemana = diasSemana[dateObj.getDay()];
-            
             if (diasNoLaborables.includes(diaSemana)) {
-                return false; // No alerta, simplemente bloquea el click
+                return false; 
             }
         }
-        
         return true;
     };
 
@@ -227,13 +225,12 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 onEventClick(info.event);
             },
             dateClick: (info) => {
-                // Obtener la fecha local de forma segura extraída del objeto Date de FullCalendar
+                // Extraer la fecha segura (evitando UTC bugs)
                 const year = info.date.getFullYear();
                 const month = String(info.date.getMonth() + 1).padStart(2, '0');
                 const day = String(info.date.getDate()).padStart(2, '0');
                 const fechaStr = `${year}-${month}-${day}`;
                 
-                // Le pasamos info.date para que el cálculo del día sea exacto
                 if (esFechaValidaParaCita(fechaStr, info.date)) {
                     onDateSelect(info.dateStr);
                 }
@@ -248,7 +245,6 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             lazyFetching: true,
             dayMaxEvents: 3,
             dayCellClassNames: (arg) => {
-                // Obtener la fecha local de forma segura
                 const year = arg.date.getFullYear();
                 const month = String(arg.date.getMonth() + 1).padStart(2, '0');
                 const day = String(arg.date.getDate()).padStart(2, '0');
@@ -261,12 +257,17 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 const clases = [];
                 
                 if (fechaStr < hoy) {
-                    clases.push('bg-gray-50', 'opacity-50');
+                    clases.push('bg-gray-50', 'opacity-50', 'pointer-events-none');
                 } else if (diasCerradosFechas.includes(fechaStr)) {
-                    clases.push('bg-red-50', 'opacity-50');
-                } else if (filtroProfesional !== 'todos' && diasNoLaborables.includes(diaSemana)) {
-                    // APLICAMOS TAILWIND PARA BLOQUEAR Y OSCURECER LA COLUMNA
-                    clases.push('bg-gray-200', 'opacity-60', 'pointer-events-none');
+                    clases.push('bg-red-50', 'opacity-50', 'pointer-events-none');
+                } else if (filtroProfesional !== 'todos') {
+                    if (diasNoLaborables.includes(diaSemana)) {
+                        // BLOQUEO ABSOLUTO PARA FULLCALENDAR (No clickeable)
+                        clases.push('bg-gray-200', 'opacity-60', 'pointer-events-none');
+                    } else {
+                        // VERDE SUAVE para los días que SÍ trabaja el profesional
+                        clases.push('bg-green-50');
+                    }
                 }
                 
                 return clases;
@@ -283,7 +284,7 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
                 calendarApiRef.current = null;
             }
         };
-    }, []); // ← Solo se ejecuta UNA VEZ al montar el componente
+    }, []);
 
     // Actualizar eventos cuando cambian las reservas (sin destruir el calendario)
     React.useEffect(() => {
@@ -349,11 +350,7 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
     // Actualizar estilos de días cuando cambian los días no laborables
     React.useEffect(() => {
         if (!calendarApiRef.current) return;
-        
-        // Refrescar la vista para que se apliquen los nuevos estilos
         calendarApiRef.current.refetchEvents();
-        console.log('🔄 Calendario refrescado - Días no laborables actualizados');
-        
     }, [diasNoLaborables, diasCerradosFechas]);
 
     return (
@@ -370,14 +367,9 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             <div className="text-xs text-gray-400 text-center mb-2 flex justify-center gap-4 flex-wrap">
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-500"></div><span>Reservado</span></div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-yellow-500"></div><span>Pendiente</span></div>
-                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>Día Cerrado (Local)</span></div>
-                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-300"></div><span>No laborable (Profesional)</span></div>
-                {(filtroProfesional !== 'todos' || filtroServicio !== 'todos') && (
-                    <div className="flex items-center gap-1 ml-4">
-                        <span className="text-pink-500">🔍</span>
-                        <span className="text-pink-600">Filtros activos</span>
-                    </div>
-                )}
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-400"></div><span>Día Cerrado</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-300"></div><span>No laborable</span></div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-green-200"></div><span>Disponible</span></div>
             </div>
             
             <div ref={calendarRef} style={{ minHeight: '450px' }}></div>
@@ -387,7 +379,7 @@ function AdminCalendar({ bookings, loading, onEventClick, onDateSelect, diasCerr
             )}
         </div>
     );
-} // <-- LLAVE DE CIERRE AÑADIDA CORRECTAMENTE
+}
 
 // ============================================
 // COMPONENTE ListaDeReservas (Vista Lista Original)
@@ -483,13 +475,11 @@ function AdminApp() {
     
     const [tabActivo, setTabActivo] = React.useState('reservas');
     
-    // Vista persistente en localStorage
     const [vistaReservas, setVistaReservas] = React.useState(() => {
         const guardada = localStorage.getItem('vistaReservas');
         return guardada === 'lista' ? 'lista' : 'calendario';
     });
     
-    // Filtros rápidos para el calendario
     const [filtroProfesional, setFiltroProfesional] = React.useState('todos');
     const [filtroServicio, setFiltroServicio] = React.useState('todos');
     
@@ -509,7 +499,6 @@ function AdminApp() {
         requiereAnticipo: false
     });
     
-    // Estado para el modal de disponibilidad
     const [showDisponibilidadModal, setShowDisponibilidadModal] = React.useState(false);
     const [disponibilidadFecha, setDisponibilidadFecha] = React.useState(new Date());
     const [disponibilidadHoras, setDisponibilidadHoras] = React.useState([]);
@@ -525,14 +514,10 @@ function AdminApp() {
     const [diasLaborales, setDiasLaborales] = React.useState([]);
     const [fechasConHorarios, setFechasConHorarios] = React.useState({});
 
-    // Guardar vista seleccionada en localStorage
     React.useEffect(() => {
         localStorage.setItem('vistaReservas', vistaReservas);
     }, [vistaReservas]);
 
-    // ============================================
-    // FUNCIÓN PARA CARGAR DÍAS CERRADOS DIRECTAMENTE DE SUPABASE
-    // ============================================
     const cargarDiasCerradosDirecto = async () => {
         try {
             const negocioId = getNegocioId();
@@ -560,9 +545,6 @@ function AdminApp() {
         }
     };
 
-    // ============================================
-    // CARGAR CONFIGURACIÓN Y LOGO
-    // ============================================
     React.useEffect(() => {
         window.getNombreNegocio().then(nombre => {
             setNombreNegocio(nombre);
@@ -587,9 +569,6 @@ function AdminApp() {
         }
     };
 
-    // ============================================
-    // DETECTAR ROL DEL USUARIO
-    // ============================================
     React.useEffect(() => {
         const profesionalAuth = window.getProfesionalAutenticado?.();
         if (profesionalAuth) {
@@ -624,7 +603,6 @@ function AdminApp() {
         cargarDatosModal();
     }, []);
 
-    // CARGAR DÍAS CERRADOS AL INICIO
     React.useEffect(() => {
         cargarDiasCerradosDirecto();
     }, []);
@@ -645,16 +623,12 @@ function AdminApp() {
         cargarDiasLaborales();
     }, [nuevaReservaData.profesional_id]);
 
-    // CARGAR DÍAS CERRADOS CUANDO SE ABRE EL MODAL
     React.useEffect(() => {
         if (showNuevaReservaModal) {
             cargarDiasCerradosDirecto();
         }
     }, [showNuevaReservaModal]);
 
-    // ============================================
-    // FUNCIÓN CORREGIDA PARA CARGAR HORARIOS (CON ZONA HORARIA)
-    // ============================================
     React.useEffect(() => {
         const cargarHorarios = async () => {
             if (!nuevaReservaData.profesional_id || !nuevaReservaData.fecha || !nuevaReservaData.servicio) {
@@ -678,17 +652,7 @@ function AdminApp() {
                 const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
                 let diaSemana = diasSemana[fechaSeleccionada.getDay()];
                 
-                const normalizarDia = (dia) => {
-                    return dia.toLowerCase()
-                        .replace(/á/g, 'a')
-                        .replace(/é/g, 'e')
-                        .replace(/í/g, 'i')
-                        .replace(/ó/g, 'o')
-                        .replace(/ú/g, 'u')
-                        .replace(/ñ/g, 'n');
-                };
-                
-                diaSemana = normalizarDia(diaSemana);
+                diaSemana = normalizarTexto(diaSemana);
                 const indicesDelDia = horariosPorDia[diaSemana] || [];
                 
                 if (indicesDelDia.length === 0) {
@@ -754,10 +718,7 @@ function AdminApp() {
         cargarHorarios();
     }, [nuevaReservaData.profesional_id, nuevaReservaData.fecha, nuevaReservaData.servicio, serviciosList]);
 
-    // ============================================
-    // FUNCIONES DE DISPONIBILIDAD (MODIFICADAS Y SINCRONIZADAS)
-    // ============================================
-    
+    // CARGAR DISPONIBILIDAD CON LÓGICA ROBUSTA
     const cargarDisponibilidadMes = async (fecha, profesionalId) => {
         if (!profesionalId) return;
         
@@ -805,7 +766,6 @@ function AdminApp() {
             for (let d = 1; d <= diasEnMes; d++) {
                 const fechaStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}`;
                 
-                // 1. Bloquear si es un día libre personal
                 if (fechasLibresPersonales.includes(fechaStr)) {
                     disponibilidad[fechaStr] = false;
                     continue;
@@ -813,17 +773,18 @@ function AdminApp() {
                 
                 const fechaActual = new Date(year, month, d);
                 const diaSemana = nombresDias[fechaActual.getDay()];
+                const diaNormalizado = normalizarTexto(diaSemana);
                 
-                // 2. Bloquear si NO tiene horarios configurados en este día específico
-                const horariosDelDia = horariosPorDia[diaSemana] || [];
+                const horariosDelDia = horariosPorDia[diaNormalizado] || [];
+                
                 if (horariosDelDia.length === 0) {
                     disponibilidad[fechaStr] = false;
                     continue;
                 }
                 
-                // 3. Bloquear si el día no está en su lista general de días de trabajo
                 let trabajaEsteDia = true;
-                if (diasTrabajo.length > 0 && !diasTrabajo.includes(diaSemana)) {
+                const diasTrabajoNorm = diasTrabajo.map(normalizarTexto);
+                if (diasTrabajoNorm.length > 0 && !diasTrabajoNorm.includes(diaNormalizado)) {
                     trabajaEsteDia = false;
                 }
                 
@@ -832,7 +793,6 @@ function AdminApp() {
                     continue;
                 }
                 
-                // 4. Calcular si aún le quedan turnos libres en el día
                 let horariosOcupados = 0;
                 const reservasDia = reservasPorFecha[fechaStr] || [];
                 
@@ -875,7 +835,6 @@ function AdminApp() {
             const month = fecha.getMonth();
             
             const horarios = await window.salonConfig.getHorariosProfesional(profesionalId);
-            const horasTrabajo = horarios.horas || [];
             const diasTrabajo = horarios.dias || [];
             const horariosPorDia = horarios.horariosPorDia || {};
             
@@ -922,8 +881,9 @@ function AdminApp() {
                 
                 const fechaActual = new Date(year, month, d);
                 const diaSemana = nombresDias[fechaActual.getDay()];
+                const diaNormalizado = normalizarTexto(diaSemana);
                 
-                const horariosDelDia = horariosPorDia[diaSemana] || [];
+                const horariosDelDia = horariosPorDia[diaNormalizado] || [];
                 
                 if (horariosDelDia.length === 0) {
                     disponibilidad[fechaStr] = false;
@@ -931,7 +891,8 @@ function AdminApp() {
                 }
                 
                 let trabajaEsteDia = true;
-                if (diasTrabajo.length > 0 && !diasTrabajo.includes(diaSemana)) {
+                const diasTrabajoNorm = diasTrabajo.map(normalizarTexto);
+                if (diasTrabajoNorm.length > 0 && !diasTrabajoNorm.includes(diaNormalizado)) {
                     trabajaEsteDia = false;
                 }
                 
@@ -942,13 +903,6 @@ function AdminApp() {
                 
                 let horariosOcupados = 0;
                 const reservasDia = reservasPorFecha[fechaStr] || [];
-                
-                const hoy = getCurrentLocalDate();
-                if (fechaStr === hoy) {
-                    console.log(`\n📅 Analizando HOY (${fechaStr}) - ${diaSemana}:`);
-                    console.log(`   Horarios del día:`, horariosDelDia.map(i => indiceToHoraLegible(i)));
-                    console.log(`   Reservas del día: ${reservasDia.length}`);
-                }
                 
                 for (const horaIndice of horariosDelDia) {
                     const slotStr = indiceToHoraLegible(horaIndice);
@@ -964,23 +918,10 @@ function AdminApp() {
                     
                     if (tieneConflicto) {
                         horariosOcupados++;
-                        if (fechaStr === hoy) {
-                            console.log(`   ❌ Horario ${slotStr} está OCUPADO`);
-                        }
-                    } else {
-                        if (fechaStr === hoy) {
-                            console.log(`   ✅ Horario ${slotStr} está LIBRE`);
-                        }
                     }
                 }
                 
                 const tieneDisponibilidad = horariosOcupados < horariosDelDia.length;
-                
-                if (fechaStr === hoy) {
-                    console.log(`   📊 Total horarios del día: ${horariosDelDia.length}, Ocupados: ${horariosOcupados}`);
-                    console.log(`   🟢 Disponible: ${tieneDisponibilidad}\n`);
-                }
-                
                 disponibilidad[fechaStr] = tieneDisponibilidad;
             }
             
@@ -992,27 +933,19 @@ function AdminApp() {
         }
     };
 
-    // ============================================
-    // FUNCIONES DEL CALENDARIO
-    // ============================================
-    
     const getDaysInMonth = (date) => {
         const year = date.getFullYear();
         const month = date.getMonth();
-        
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
-        
         const days = [];
         
         for (let i = 0; i < firstDay.getDay(); i++) {
             days.push(null);
         }
-        
         for (let i = 1; i <= lastDay.getDate(); i++) {
             days.push(new Date(year, month, i));
         }
-        
         return days;
     };
     
@@ -1029,29 +962,24 @@ function AdminApp() {
         const fechaStr = formatDate(date);
         const hoy = getCurrentLocalDate();
 
-        // 1. Bloqueo por fecha pasada
         if (fechaStr < hoy) return false;
-
-        // 2. Bloqueo por local cerrado
         if (diasCerradosFechas.includes(fechaStr)) return false;
         
         const profesional = profesionalesList.find(p => p.id === parseInt(nuevaReservaData.profesional_id));
         if (!profesional) return false;
 
-        // 3. Bloqueo por feriados/días libres específicos del profesional
         if (profesional.fechas_libres && profesional.fechas_libres.includes(fechaStr)) return false;
         
-        // 4. Bloqueo por día de la semana (Lunes, Martes...)
         const fechaLocal = new Date(date.getFullYear(), date.getMonth(), date.getDate());
         const nombresDias = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
         const diaSemana = nombresDias[fechaLocal.getDay()];
 
-        // Verificamos si el día está en su lista de días laborales configurados
-        if (diasLaborales.length > 0 && !diasLaborales.includes(diaSemana)) {
+        const diasLaboralesNorm = diasLaborales.map(normalizarTexto);
+
+        if (diasLaboralesNorm.length > 0 && !diasLaboralesNorm.includes(normalizarTexto(diaSemana))) {
             return false;
         }
 
-        // 5. Validación final contra el motor de disponibilidad (fechasConHorarios)
         return fechasConHorarios[fechaStr] === true;
     };
     
@@ -1079,9 +1007,6 @@ function AdminApp() {
         cargarDisponibilidadDelMes(nuevaFecha, profesionalSeleccionadoDispo);
     };
 
-    // ============================================
-    // CREAR RESERVA MANUAL
-    // ============================================
     const handleCrearReservaManual = async () => {
         if (!nuevaReservaData.cliente_nombre || !nuevaReservaData.cliente_whatsapp || 
             !nuevaReservaData.servicio || !nuevaReservaData.profesional_id || 
@@ -1120,8 +1045,6 @@ function AdminApp() {
                 estado: requiereAnticipo ? "Pendiente" : "Reservado"
             };
 
-            console.log('📤 Creando reserva manual. Requiere anticipo:', requiereAnticipo);
-            
             const result = await createBooking(bookingData);
             
             if (result.success && result.data) {
@@ -1163,31 +1086,20 @@ function AdminApp() {
         }
     };
 
-    // ============================================
-    // FUNCIONES DE CLIENTES
-    // ============================================
-    
     const loadClientesRegistrados = async () => {
-        console.log('🔄 Cargando clientes registrados...');
         setCargandoClientes(true);
         try {
             if (typeof window.getClientesRegistrados !== 'function') {
-                console.error('❌ getClientesRegistrados no está definida');
                 setClientesRegistrados([]);
                 return;
             }
-            
             const registrados = await window.getClientesRegistrados();
-            console.log('📋 Registrados obtenidos:', registrados.length);
-            
             if (Array.isArray(registrados)) {
                 setClientesRegistrados(registrados);
             } else {
-                console.error('❌ registrados no es un array:', registrados);
                 setClientesRegistrados([]);
             }
         } catch (error) {
-            console.error('Error cargando registrados:', error);
             setClientesRegistrados([]);
         } finally {
             setCargandoClientes(false);
@@ -1196,7 +1108,6 @@ function AdminApp() {
 
     const handleEliminarCliente = async (whatsapp) => {
         if (!confirm('¿Seguro que querés eliminar este cliente? Perderá el acceso a la app.')) return;
-        console.log('🗑️ Eliminando cliente:', whatsapp);
         try {
             if (typeof window.eliminarCliente !== 'function') {
                 alert('Error: Función no disponible');
@@ -1213,28 +1124,18 @@ function AdminApp() {
         }
     };
 
-    // ============================================
-    // FUNCIONES DE RESERVAS
-    // ============================================
     const fetchBookings = async () => {
-        console.log('🔄 fetchBookings - INICIANDO CARGA');
         setLoading(true);
         try {
             let data;
-            
             if (userRole === 'profesional' && profesional) {
-                console.log(`📋 Cargando reservas de profesional ${profesional.id}...`);
                 data = await window.getReservasPorProfesional?.(profesional.id, false) || [];
             } else {
-                console.log('📋 Llamando a getAllBookings...');
                 data = await getAllBookings();
             }
             
-            console.log('📊 Datos recibidos en fetchBookings:', data?.length || 0);
-            
             if (Array.isArray(data)) {
                 data.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora_inicio.localeCompare(b.hora_inicio));
-                
                 await marcarTurnosCompletados();
                 
                 if (userRole === 'profesional' && profesional) {
@@ -1242,13 +1143,6 @@ function AdminApp() {
                 } else {
                     data = await getAllBookings();
                 }
-                
-                console.log('✅ RESERVAS CARGADAS:', data.length);
-                console.log('📅 Rango de fechas:', {
-                    primera: data.length > 0 ? data[data.length-1]?.fecha : 'sin datos',
-                    ultima: data.length > 0 ? data[0]?.fecha : 'sin datos'
-                });
-                
                 setBookings(Array.isArray(data) ? data : []);
             } else {
                 setBookings([]);
@@ -1263,40 +1157,23 @@ function AdminApp() {
 
     React.useEffect(() => {
         const intervalo = setInterval(() => {
-            console.log('⏰ Verificando turnos para completar...');
-            
             marcarTurnosCompletados().then(() => {
                 fetchBookings();
             });
-            
         }, 60000);
-        
         return () => clearInterval(intervalo);
     }, []);
 
     React.useEffect(() => {
         fetchBookings();
-        
         if (userRole === 'admin' || (userRole === 'profesional' && userNivel >= 2)) {
             loadClientesRegistrados();
         }
-        
-        console.log('🔍 Verificando auth:', {
-            userRole,
-            userNivel,
-            profesional
-        });
     }, [userRole, userNivel, profesional]);
 
-    // ============================================
-    // FUNCIÓN PARA CONFIRMAR PAGO
-    // ============================================
     const confirmarPago = async (id, bookingData) => {
         if (!confirm(`¿Confirmar que se recibió el pago de ${bookingData.cliente_nombre}? El turno pasará a "Reservado".`)) return;
-        
         try {
-            console.log(`💰 Confirmando pago para reserva ${id}`);
-            
             const response = await fetch(
                 `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${getNegocioId()}&id=eq.${id}`,
                 {
@@ -1309,62 +1186,27 @@ function AdminApp() {
                     body: JSON.stringify({ estado: 'Reservado' })
                 }
             );
-            
-            if (!response.ok) {
-                throw new Error('Error al confirmar pago');
-            }
-            
-            console.log('📤 Enviando confirmación de turno al cliente...');
+            if (!response.ok) throw new Error('Error al confirmar pago');
             
             const configNegocio = await window.cargarConfiguracionNegocio();
+            const fechaConDia = window.formatFechaCompleta ? window.formatFechaCompleta(bookingData.fecha) : bookingData.fecha;
+            const horaFormateada = window.formatTo12Hour ? window.formatTo12Hour(bookingData.hora_inicio) : bookingData.hora_inicio;
+            const nombreNegocio = configNegocio?.nombre || await window.getNombreNegocio ? await window.getNombreNegocio() : 'Mi Negocio';
             
-            const fechaConDia = window.formatFechaCompleta ? 
-                window.formatFechaCompleta(bookingData.fecha) : 
-                bookingData.fecha;
-            
-            const horaFormateada = window.formatTo12Hour ? 
-                window.formatTo12Hour(bookingData.hora_inicio) : 
-                bookingData.hora_inicio;
-            
-            const nombreNegocio = configNegocio?.nombre || await window.getNombreNegocio ? 
-                await window.getNombreNegocio() : 
-                'Mi Negocio';
-            
-            const mensajeCliente = 
-`💅 *${nombreNegocio} - Turno Confirmado* 🎉
-
-Hola *${bookingData.cliente_nombre}*, ¡tu turno ha sido CONFIRMADO!
-
-📅 *Fecha:* ${fechaConDia}
-⏰ *Hora:* ${horaFormateada}
-💅 *Servicio:* ${bookingData.servicio}
-👩‍🎨 *Profesional:* ${bookingData.profesional_nombre || bookingData.trabajador_nombre}
-
-✅ *Pago recibido correctamente*
-
-Te esperamos 💖
-Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipación.`;
-
+            const mensajeCliente = `💅 *${nombreNegocio} - Turno Confirmado* 🎉\n\nHola *${bookingData.cliente_nombre}*, ¡tu turno ha sido CONFIRMADO!\n\n📅 *Fecha:* ${fechaConDia}\n⏰ *Hora:* ${horaFormateada}\n💅 *Servicio:* ${bookingData.servicio}\n👩‍🎨 *Profesional:* ${bookingData.profesional_nombre || bookingData.trabajador_nombre}\n\n✅ *Pago recibido correctamente*\n\nTe esperamos 💖\nCualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipación.`;
             window.enviarWhatsApp(bookingData.cliente_whatsapp, mensajeCliente);
-            
             alert('✅ Pago confirmado. Turno reservado y cliente notificado.');
             fetchBookings();
-            
         } catch (error) {
             console.error('Error confirmando pago:', error);
             alert('❌ Error al confirmar el pago');
         }
     };
 
-    // ============================================
-    // FUNCIÓN PARA BORRAR TODAS LAS RESERVAS CANCELADAS
-    // ============================================
     const borrarCanceladas = async () => {
         if (!confirm('¿Estás segura de querer borrar TODAS las reservas canceladas? Esta acción no se puede deshacer.')) return;
-        
         try {
             const negocioId = getNegocioId();
-            
             const response = await fetch(
                 `${window.SUPABASE_URL}/rest/v1/reservas?negocio_id=eq.${negocioId}&estado=eq.Cancelado`,
                 {
@@ -1376,39 +1218,25 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                     }
                 }
             );
-            
             if (!response.ok) {
-                const error = await response.text();
-                console.error('Error al borrar:', error);
                 alert('❌ Error al borrar las reservas canceladas');
                 return;
             }
-            
             alert(`✅ Se borraron todas las reservas canceladas correctamente`);
             fetchBookings();
-            
         } catch (error) {
-            console.error('Error:', error);
             alert('❌ Error al conectar con el servidor');
         }
     };
 
-    // ============================================
-    // HANDLE CANCEL
-    // ============================================
     const handleCancel = async (id, bookingData) => {
         if (!confirm(`¿Cancelar reserva de ${bookingData.cliente_nombre}?`)) return;
-        
         const ok = await cancelBooking(id);
         if (ok) {
-            console.log('📤 Enviando notificaciones de cancelación por admin...');
-            
             bookingData.cancelado_por = 'admin';
-            
             if (window.notificarCancelacion) {
                 await window.notificarCancelacion(bookingData);
             }
-            
             alert('✅ Reserva cancelada');
             fetchBookings();
         } else {
@@ -1425,15 +1253,10 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
             localStorage.removeItem('userRole');
             localStorage.removeItem('clienteAuth');
             localStorage.removeItem('negocioId');
-            
-            console.log('🚪 Sesión cerrada, redirigiendo a index.html');
             window.location.href = 'index.html';
         }
     };
 
-    // ============================================
-    // NUEVAS FUNCIONES PARA EL CALENDARIO DE RESERVAS
-    // ============================================
     const handleCalendarEventClick = (event) => {
         const data = event.extendedProps;
         const action = confirm(`📅 *Reserva de ${data.cliente_nombre}*\n\n💅 Servicio: ${data.servicio}\n👤 Profesional: ${data.profesional_nombre}\n📅 Fecha: ${window.formatFechaCompleta ? window.formatFechaCompleta(data.fecha) : data.fecha}\n⏰ Hora: ${formatTo12Hour(data.hora_inicio)}\n💰 Estado: ${data.estado}\n\n¿Qué deseas hacer?\n✅ OK = Confirmar pago (si está pendiente)\n❌ Cancelar = Cancelar turno`);
@@ -1446,49 +1269,25 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
     const handleCalendarDateSelect = (dateStr) => {
         const fechaSeleccionada = dateStr.split('T')[0];
         const hoy = getCurrentLocalDate();
-        
         if (fechaSeleccionada < hoy) {
             alert('❌ No se pueden crear reservas en fechas pasadas');
             return;
         }
-        
         if (diasCerradosFechas.includes(fechaSeleccionada)) {
             alert('❌ El local está cerrado este día. No se pueden crear reservas.');
             return;
         }
-        
         setNuevaReservaData({ ...nuevaReservaData, fecha: fechaSeleccionada });
         setShowNuevaReservaModal(true);
     };
 
-    // ============================================
-    // FILTROS
-    // ============================================
     const getFilteredBookings = () => {
-        console.log('🔄 Aplicando filtros a', bookings.length, 'reservas');
-        
-        let filtradas = filterDate
-            ? bookings.filter(b => b.fecha === filterDate)
-            : [...bookings];
-        
-        console.log('📊 Después filtro fecha:', filtradas.length);
-        
-        let resultado;
-        if (statusFilter === 'activas') {
-            resultado = filtradas.filter(b => b.estado === 'Reservado');
-        } else if (statusFilter === 'pendientes') {
-            resultado = filtradas.filter(b => b.estado === 'Pendiente');
-        } else if (statusFilter === 'completadas') {
-            resultado = filtradas.filter(b => b.estado === 'Completado');
-        } else if (statusFilter === 'canceladas') {
-            resultado = filtradas.filter(b => b.estado === 'Cancelado');
-        } else {
-            resultado = filtradas;
-        }
-        
-        console.log('📊 Resultado final:', resultado.length);
-        
-        return resultado;
+        let filtradas = filterDate ? bookings.filter(b => b.fecha === filterDate) : [...bookings];
+        if (statusFilter === 'activas') return filtradas.filter(b => b.estado === 'Reservado');
+        if (statusFilter === 'pendientes') return filtradas.filter(b => b.estado === 'Pendiente');
+        if (statusFilter === 'completadas') return filtradas.filter(b => b.estado === 'Completado');
+        if (statusFilter === 'canceladas') return filtradas.filter(b => b.estado === 'Cancelado');
+        return filtradas;
     };
 
     const activasCount = bookings.filter(b => b.estado === 'Reservado').length;
@@ -1500,29 +1299,22 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
     const getTabsDisponibles = () => {
         const tabs = [];
         tabs.push({ id: 'reservas', icono: '📅', label: userRole === 'profesional' ? 'Mis Reservas' : 'Reservas' });
-        
         if (userRole === 'admin' || (userRole === 'profesional' && userNivel >= 2)) {
             tabs.push({ id: 'configuracion', icono: '⚙️', label: 'Configuración' });
             tabs.push({ id: 'clientes', icono: '👤', label: 'Clientes' });
         }
-        
         if (userRole === 'admin' || (userRole === 'profesional' && userNivel >= 3)) {
             tabs.push({ id: 'servicios', icono: '💈', label: 'Servicios' });
             tabs.push({ id: 'profesionales', icono: '👥', label: 'Profesionales' });
         }
-        
         return tabs;
     };
 
     const abrirModalNuevaReserva = () => {
         setNuevaReservaData({
-            cliente_nombre: '',
-            cliente_whatsapp: '',
-            servicio: '',
+            cliente_nombre: '', cliente_whatsapp: '', servicio: '',
             profesional_id: userRole === 'profesional' ? profesional?.id : '',
-            fecha: '',
-            hora_inicio: '',
-            requiereAnticipo: false
+            fecha: '', hora_inicio: '', requiereAnticipo: false
         });
         setCurrentDate(new Date());
         setDiasLaborales([]);
@@ -1549,19 +1341,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                 <div className="bg-white p-4 rounded-xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-l-4 border-pink-500">
                     <div className="flex items-center gap-3">
                         {logoNegocio ? (
-                            <img 
-                                src={logoNegocio} 
-                                alt={nombreNegocio} 
-                                className="w-12 h-12 object-contain rounded-xl shadow-lg ring-2 ring-pink-300 bg-white p-1"
-                                onError={(e) => {
-                                    e.target.onerror = null;
-                                    e.target.style.display = 'none';
-                                    const parent = e.target.parentElement;
-                                    if (parent) {
-                                        parent.innerHTML = '<div class="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-lg flex items-center justify-center"><span class="text-2xl text-white">💖</span></div>';
-                                    }
-                                }}
-                            />
+                            <img src={logoNegocio} alt={nombreNegocio} className="w-12 h-12 object-contain rounded-xl shadow-lg ring-2 ring-pink-300 bg-white p-1"/>
                         ) : (
                             <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-lg flex items-center justify-center">
                                 <span className="text-2xl text-white">💖</span>
@@ -1574,55 +1354,27 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                        <button
-                            onClick={abrirModalNuevaReserva}
-                            className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 shadow-md border border-green-400 flex-1 sm:flex-none justify-center"
-                        >
-                            <span className="text-lg">📅</span>
-                            <span className="font-medium">Nueva Reserva</span>
+                        <button onClick={abrirModalNuevaReserva} className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white px-4 py-2 rounded-lg shadow-md border border-green-400">
+                            <span className="text-lg">📅</span><span className="font-medium">Nueva Reserva</span>
                         </button>
 
-                        <button
-                            onClick={abrirModalDisponibilidad}
-                            className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 shadow-md border border-blue-400 flex-1 sm:flex-none justify-center"
-                            title="Ver disponibilidad mensual"
-                        >
-                            <span className="text-lg">📆</span>
-                            <span className="font-medium">Ver Disponibilidad</span>
+                        <button onClick={abrirModalDisponibilidad} className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-lg shadow-md border border-blue-400">
+                            <span className="text-lg">📆</span><span className="font-medium">Ver Disponibilidad</span>
                         </button>
 
-                        <button
-                            onClick={() => window.location.href = 'editar-negocio.html'}
-                            className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white px-4 py-2 rounded-lg transition-all transform hover:scale-105 shadow-md border border-pink-400 flex-1 sm:flex-none justify-center"
-                        >
-                            <span className="text-lg">💖</span>
-                            <span className="font-medium">Editar Negocio</span>
+                        <button onClick={() => window.location.href = 'editar-negocio.html'} className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white px-4 py-2 rounded-lg shadow-md border border-pink-400">
+                            <span className="text-lg">💖</span><span className="font-medium">Editar Negocio</span>
                         </button>
 
-                        <button 
-                            onClick={() => {
-                                cargarConfiguracion();
-                                setConfigVersion(prev => prev + 1);
-                            }} 
-                            className="p-2 bg-pink-50 rounded-full hover:bg-pink-100 transition-all hover:scale-105 border border-pink-200"
-                            title="Recargar datos del negocio"
-                        >
+                        <button onClick={() => {cargarConfiguracion(); setConfigVersion(prev => prev + 1);}} className="p-2 bg-pink-50 rounded-full hover:bg-pink-100 border border-pink-200">
                             <i className="icon-refresh-cw text-pink-600"></i>
                         </button>
 
-                        <button 
-                            onClick={fetchBookings} 
-                            className="p-2 bg-pink-50 rounded-full hover:bg-pink-100 transition-all hover:scale-105 border border-pink-200"
-                            title="Actualizar reservas"
-                        >
+                        <button onClick={fetchBookings} className="p-2 bg-pink-50 rounded-full hover:bg-pink-100 border border-pink-200">
                             <i className="icon-refresh-cw text-pink-600"></i>
                         </button>
 
-                        <button 
-                            onClick={handleLogout}
-                            className="p-2 bg-pink-50 rounded-full hover:bg-pink-100 transition-all hover:scale-105 border border-pink-200"
-                            title="Cerrar sesión"
-                        >
+                        <button onClick={handleLogout} className="p-2 bg-pink-50 rounded-full hover:bg-pink-100 border border-pink-200">
                             <i className="icon-log-out text-pink-600"></i>
                         </button>
                     </div>
@@ -1692,14 +1444,14 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                                                         
                                                         const estaBloqueado = !available || esPasado || esCerrado;
 
-                                                        let className = "h-10 w-full rounded-lg text-sm font-medium transition-all";
+                                                        let className = "h-10 w-full rounded-lg text-sm font-medium transition-all ";
                                                         
                                                         if (selected) {
-                                                            className += " bg-pink-500 text-white shadow-md z-10 scale-110";
+                                                            className += "bg-pink-500 text-white shadow-md z-10 scale-110";
                                                         } else if (estaBloqueado) {
-                                                            className += " text-gray-300 cursor-not-allowed bg-gray-50/50 line-through opacity-50";
+                                                            className += "text-gray-300 cursor-not-allowed bg-gray-50/50 line-through opacity-50";
                                                         } else {
-                                                            className += " text-gray-700 hover:bg-pink-100 hover:text-pink-600 cursor-pointer";
+                                                            className += "bg-green-100 text-green-700 hover:bg-green-200 cursor-pointer shadow-sm";
                                                         }
                                                         
                                                         return (
@@ -1868,7 +1620,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                     </div>
                 )}
 
-                {/* RESERVAS - con toggle entre Calendario y Lista */}
+                {/* RESERVAS */}
                 {tabActivo === 'reservas' && (
                     <>
                         {userRole === 'profesional' && profesional && (
@@ -1877,7 +1629,6 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                             </div>
                         )}
 
-                        {/* Toggle de vistas */}
                         <div className="bg-white p-2 rounded-xl shadow-sm flex gap-2 w-fit">
                             <button onClick={() => setVistaReservas('calendario')} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${vistaReservas === 'calendario' ? 'bg-pink-500 text-white shadow-md' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
                                 <span>📅</span>Vista Calendario
@@ -1887,7 +1638,6 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                             </button>
                         </div>
 
-                        {/* Filtros rápidos */}
                         <div className="bg-white p-3 rounded-xl shadow-sm mb-4">
                             <div className="flex flex-wrap gap-4 items-center">
                                 <div className="flex items-center gap-2">
