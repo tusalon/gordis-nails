@@ -656,7 +656,7 @@ function AdminApp() {
                 if (!servicio) return;
 
                 const horarios = await window.salonConfig.getHorariosProfesional(nuevaReservaData.profesional_id);
-                const horariosPorDia = horarios.horariosPorDia || {};
+                const horariosPorDiaBase = horarios.horariosPorDia || {};
                 
                 const partes = nuevaReservaData.fecha.split('-');
                 const año = parseInt(partes[0]);
@@ -669,8 +669,11 @@ function AdminApp() {
                 
                 diaSemana = normalizarTexto(diaSemana);
                 
+                const horariosEfectivos = window.salonConfig?.getHorariosEfectivosPorFecha
+                    ? window.salonConfig.getHorariosEfectivosPorFecha(horariosPorDiaBase, nuevaReservaData.fecha).horariosPorDia
+                    : horariosPorDiaBase;
                 const horariosNormalizados = {};
-                for (const [key, value] of Object.entries(horariosPorDia)) {
+                for (const [key, value] of Object.entries(horariosEfectivos)) {
                     horariosNormalizados[normalizarTexto(key)] = value;
                 }
                 
@@ -743,13 +746,6 @@ function AdminApp() {
     const actualizarMapaDisponibilidad = async (fechaBase, profId) => {
         try {
             const horarios = await window.salonConfig.getHorariosProfesional(profId);
-            const horariosPorDiaBruto = horarios.horariosPorDia || {};
-            
-            const horariosPorDia = {};
-            for (const [key, value] of Object.entries(horariosPorDiaBruto)) {
-                horariosPorDia[normalizarTexto(key)] = value;
-            }
-
             const year = fechaBase.getFullYear();
             const month = fechaBase.getMonth();
             const ultimoDia = new Date(year, month + 1, 0).getDate();
@@ -764,7 +760,10 @@ function AdminApp() {
                 const diaSemana = nombresDias[actual.getDay()];
                 const diaNorm = normalizarTexto(diaSemana);
                 
-                const slots = horariosPorDia[diaNorm] || [];
+                const horariosEfectivos = window.salonConfig?.getHorariosEfectivosPorFecha
+                    ? window.salonConfig.getHorariosEfectivosPorFecha(horarios.horariosPorDia || {}, fechaStr).horariosPorDia
+                    : (horarios.horariosPorDia || {});
+                const slots = horariosEfectivos[diaNorm] || [];
                 
                 if (slots.length === 0) {
                     mapa[fechaStr] = false;
@@ -795,7 +794,7 @@ function AdminApp() {
             
             const horarios = await window.salonConfig.getHorariosProfesional(profesionalId);
             const diasTrabajo = horarios.dias || [];
-            const horariosPorDia = horarios.horariosPorDia || {};
+            const horariosPorDiaBase = horarios.horariosPorDia || {};
             
             const profesionalObj = profesionalesList.find(p => p.id === parseInt(profesionalId));
             const fechasLibresPersonales = profesionalObj?.fechas_libres || [];
@@ -842,8 +841,12 @@ function AdminApp() {
                 const diaSemana = nombresDias[fechaActual.getDay()];
                 const diaNormalizado = normalizarTexto(diaSemana);
                 
+                const resultadoHorarios = window.salonConfig?.getHorariosEfectivosPorFecha
+                    ? window.salonConfig.getHorariosEfectivosPorFecha(horariosPorDiaBase, fechaStr)
+                    : { horariosPorDia: horariosPorDiaBase, periodoEspecial: null };
+                const horariosEfectivos = resultadoHorarios.horariosPorDia;
                 const horariosNormalizados = {};
-                for (const [key, value] of Object.entries(horariosPorDia)) {
+                for (const [key, value] of Object.entries(horariosEfectivos)) {
                     horariosNormalizados[normalizarTexto(key)] = value;
                 }
                 
@@ -856,7 +859,7 @@ function AdminApp() {
                 
                 let trabajaEsteDia = true;
                 const diasTrabajoNorm = diasTrabajo.map(normalizarTexto);
-                if (diasTrabajoNorm.length > 0 && !diasTrabajoNorm.includes(diaNormalizado)) {
+                if (!resultadoHorarios.periodoEspecial && diasTrabajoNorm.length > 0 && !diasTrabajoNorm.includes(diaNormalizado)) {
                     trabajaEsteDia = false;
                 }
                 
@@ -908,7 +911,7 @@ function AdminApp() {
             
             const horarios = await window.salonConfig.getHorariosProfesional(profesionalId);
             const diasTrabajo = horarios.dias || [];
-            const horariosPorDia = horarios.horariosPorDia || {};
+            const horariosPorDiaBase = horarios.horariosPorDia || {};
             
             const profesionalObj = profesionalesList.find(p => p.id === profesionalId);
             const fechasLibresPersonales = profesionalObj?.fechas_libres || [];
@@ -955,8 +958,12 @@ function AdminApp() {
                 const diaSemana = nombresDias[fechaActual.getDay()];
                 const diaNormalizado = normalizarTexto(diaSemana);
                 
+                const resultadoHorarios = window.salonConfig?.getHorariosEfectivosPorFecha
+                    ? window.salonConfig.getHorariosEfectivosPorFecha(horariosPorDiaBase, fechaStr)
+                    : { horariosPorDia: horariosPorDiaBase, periodoEspecial: null };
+                const horariosEfectivos = resultadoHorarios.horariosPorDia;
                 const horariosNormalizados = {};
-                for (const [key, value] of Object.entries(horariosPorDia)) {
+                for (const [key, value] of Object.entries(horariosEfectivos)) {
                     horariosNormalizados[normalizarTexto(key)] = value;
                 }
                 
@@ -969,7 +976,7 @@ function AdminApp() {
                 
                 let trabajaEsteDia = true;
                 const diasTrabajoNorm = diasTrabajo.map(normalizarTexto);
-                if (diasTrabajoNorm.length > 0 && !diasTrabajoNorm.includes(diaNormalizado)) {
+                if (!resultadoHorarios.periodoEspecial && diasTrabajoNorm.length > 0 && !diasTrabajoNorm.includes(diaNormalizado)) {
                     trabajaEsteDia = false;
                 }
                 
@@ -1096,7 +1103,7 @@ function AdminApp() {
             try {
                 // Obtener horarios del profesional
                 const horarios = await window.salonConfig.getHorariosProfesional(prof.id);
-                const horariosPorDia = horarios.horariosPorDia || {};
+                const horariosPorDiaBase = horarios.horariosPorDia || {};
                 
                 const fecha = new Date(fechaSeleccionada);
                 const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
@@ -1104,8 +1111,11 @@ function AdminApp() {
                 const diaNorm = normalizarTexto(diaSemana);
                 
                 // Normalizar claves del objeto horariosPorDia
+                const horariosEfectivos = window.salonConfig?.getHorariosEfectivosPorFecha
+                    ? window.salonConfig.getHorariosEfectivosPorFecha(horariosPorDiaBase, fechaSeleccionada).horariosPorDia
+                    : horariosPorDiaBase;
                 const horariosNormalizados = {};
-                for (const [key, value] of Object.entries(horariosPorDia)) {
+                for (const [key, value] of Object.entries(horariosEfectivos)) {
                     horariosNormalizados[normalizarTexto(key)] = value;
                 }
                 

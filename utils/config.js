@@ -45,6 +45,53 @@ const horaToIndice = (horaStr) => {
     return horas * 2 + (minutos === 30 ? 1 : 0);
 };
 
+const DIAS_SEMANA_CONFIG = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+const CLAVE_HORARIOS_ESPECIALES = '__especiales';
+
+const normalizarHorariosPorDia = (horariosPorDia = {}) => {
+    const normalizados = {};
+    DIAS_SEMANA_CONFIG.forEach(dia => {
+        normalizados[dia] = Array.isArray(horariosPorDia[dia]) ? horariosPorDia[dia] : [];
+    });
+    return normalizados;
+};
+
+const getDiaSemanaDesdeFecha = (fechaStr) => {
+    if (!fechaStr) return null;
+    const [year, month, day] = fechaStr.split('-').map(Number);
+    const fecha = new Date(year, month - 1, day);
+    return DIAS_SEMANA_CONFIG[fecha.getDay()];
+};
+
+const getHorariosEspeciales = (horariosPorDia = {}) => {
+    return Array.isArray(horariosPorDia[CLAVE_HORARIOS_ESPECIALES])
+        ? horariosPorDia[CLAVE_HORARIOS_ESPECIALES]
+        : [];
+};
+
+const getHorarioEspecialParaFecha = (horariosPorDia = {}, fechaStr) => {
+    if (!fechaStr) return null;
+
+    return getHorariosEspeciales(horariosPorDia)
+        .filter(periodo => periodo && periodo.fecha_inicio && periodo.fecha_fin)
+        .find(periodo => fechaStr >= periodo.fecha_inicio && fechaStr <= periodo.fecha_fin) || null;
+};
+
+const getHorariosEfectivosPorFecha = (horariosPorDia = {}, fechaStr) => {
+    const periodoEspecial = getHorarioEspecialParaFecha(horariosPorDia, fechaStr);
+    if (periodoEspecial && periodoEspecial.horarios_por_dia) {
+        return {
+            horariosPorDia: normalizarHorariosPorDia(periodoEspecial.horarios_por_dia),
+            periodoEspecial
+        };
+    }
+
+    return {
+        horariosPorDia: normalizarHorariosPorDia(horariosPorDia),
+        periodoEspecial: null
+    };
+};
+
 // ============================================
 // FUNCIONES DE CARGA
 // ============================================
@@ -255,12 +302,13 @@ window.salonConfig = {
             let body;
             
             const todasLasHoras = new Set();
-            Object.values(horariosPorDia).forEach(horasArray => {
+            DIAS_SEMANA_CONFIG.forEach(dia => {
+                const horasArray = Array.isArray(horariosPorDia[dia]) ? horariosPorDia[dia] : [];
                 horasArray.forEach(hora => todasLasHoras.add(hora));
             });
             const horasArray = Array.from(todasLasHoras).sort((a, b) => a - b);
             
-            const diasQueTrabajan = Object.keys(horariosPorDia).filter(dia => horariosPorDia[dia].length > 0);
+            const diasQueTrabajan = DIAS_SEMANA_CONFIG.filter(dia => (horariosPorDia[dia] || []).length > 0);
             
             if (existe && existe.length > 0) {
                 console.log('🔄 Actualizando registro existente ID:', existe[0].id);
@@ -345,13 +393,22 @@ window.salonConfig = {
                 return {
                     horas: data[0].horas || [],
                     dias: data[0].dias || [],
-                    horariosPorDia: data[0].horarios_por_dia || {}
+                    horariosPorDia: data[0].horarios_por_dia || {},
+                    horariosEspeciales: getHorariosEspeciales(data[0].horarios_por_dia || {})
                 };
             }
-            return { horas: [], dias: [], horariosPorDia: {} };
+            return { horas: [], dias: [], horariosPorDia: {}, horariosEspeciales: [] };
         } catch (error) {
-            return { horas: [], dias: [], horariosPorDia: {} };
+            return { horas: [], dias: [], horariosPorDia: {}, horariosEspeciales: [] };
         }
+    },
+
+    getHorariosEfectivosPorFecha: function(horariosPorDia, fechaStr) {
+        return getHorariosEfectivosPorFecha(horariosPorDia, fechaStr);
+    },
+
+    getHorarioEspecialParaFecha: function(horariosPorDia, fechaStr) {
+        return getHorarioEspecialParaFecha(horariosPorDia, fechaStr);
     },
     
     guardarHorariosProfesional: async function(profesionalId, horarios) {

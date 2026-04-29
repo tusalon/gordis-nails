@@ -8,6 +8,7 @@ function TimeSlots({ service, date, profesional, onTimeSelect, selectedTime }) {
     const [diaTrabaja, setDiaTrabaja] = React.useState(true);
     const [verificacionCompleta, setVerificacionCompleta] = React.useState(false);
     const [maxAntelacionDias, setMaxAntelacionDias] = React.useState(30);
+    const [periodoEspecialActivo, setPeriodoEspecialActivo] = React.useState(null);
 
     const indiceToHoraLegible = (indice) => {
         const horas = Math.floor(indice / 2);
@@ -94,7 +95,10 @@ function TimeSlots({ service, date, profesional, onTimeSelect, selectedTime }) {
         const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
         const diaSemana = diasSemana[fechaLocal.getDay()];
         
-        const horariosDelDia = horariosPorDia[diaSemana] || [];
+        const horariosEfectivos = window.salonConfig?.getHorariosEfectivosPorFecha
+            ? window.salonConfig.getHorariosEfectivosPorFecha(horariosPorDia, date)
+            : { horariosPorDia, periodoEspecial: null };
+        const horariosDelDia = horariosEfectivos.horariosPorDia[diaSemana] || [];
         const trabaja = horariosDelDia.length > 0;
         
         console.log(`🎯 ¿${profesional.nombre} trabaja el ${diaSemana}?`, trabaja);
@@ -103,6 +107,7 @@ function TimeSlots({ service, date, profesional, onTimeSelect, selectedTime }) {
         }
         
         setDiaTrabaja(trabaja);
+        setPeriodoEspecialActivo(horariosEfectivos.periodoEspecial);
         setVerificacionCompleta(true);
         
     }, [profesional, horariosPorDia, date]);
@@ -138,7 +143,10 @@ function TimeSlots({ service, date, profesional, onTimeSelect, selectedTime }) {
                 const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
                 const diaSemana = diasSemana[fechaLocal.getDay()];
                 
-                const indicesDelDia = horariosPorDia[diaSemana] || [];
+                const horariosEfectivos = window.salonConfig?.getHorariosEfectivosPorFecha
+                    ? window.salonConfig.getHorariosEfectivosPorFecha(horariosPorDia, date)
+                    : { horariosPorDia, periodoEspecial: null };
+                const indicesDelDia = horariosEfectivos.horariosPorDia[diaSemana] || [];
                 
                 if (indicesDelDia.length === 0) {
                     console.log(`⚠️ No hay horas configuradas para ${diaSemana}`);
@@ -287,6 +295,11 @@ function TimeSlots({ service, date, profesional, onTimeSelect, selectedTime }) {
                                 Horarios disponibles de {profesional.nombre} para {formatDateLocal(date)}:
                             </span>
                         </div>
+                        {periodoEspecialActivo && (
+                            <div className="mt-2 text-xs text-pink-600">
+                                Usando horario especial: {periodoEspecialActivo.nombre || 'Periodo especial'}
+                            </div>
+                        )}
                     </div>
                     
                     {date === getCurrentLocalDate() && (

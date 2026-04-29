@@ -2,6 +2,9 @@
 
 function HorariosPorDiaPanel({ profesionalId, profesionalNombre, onGuardar, onCancelar }) {
     const [horariosPorDia, setHorariosPorDia] = React.useState({});
+    const [horariosEspeciales, setHorariosEspeciales] = React.useState([]);
+    const [modoEdicion, setModoEdicion] = React.useState('normal');
+    const [especialSeleccionadoId, setEspecialSeleccionadoId] = React.useState('');
     const [cargando, setCargando] = React.useState(true);
     const [diaSeleccionado, setDiaSeleccionado] = React.useState('lunes');
     const [horasDisponibles, setHorasDisponibles] = React.useState([]);
@@ -15,6 +18,37 @@ function HorariosPorDiaPanel({ profesionalId, profesionalNombre, onGuardar, onCa
         { id: 'sabado', nombre: 'Sábado' },
         { id: 'domingo', nombre: 'Domingo' }
     ];
+
+    const crearHorariosVacios = () => {
+        const vacios = {};
+        dias.forEach(dia => {
+            vacios[dia.id] = [];
+        });
+        return vacios;
+    };
+
+    const getEspecialSeleccionado = () => {
+        return horariosEspeciales.find(periodo => periodo.id === especialSeleccionadoId) || null;
+    };
+
+    const getHorariosEditables = () => {
+        if (modoEdicion === 'especial') {
+            return getEspecialSeleccionado()?.horarios_por_dia || crearHorariosVacios();
+        }
+        return horariosPorDia;
+    };
+
+    const setHorariosEditables = (nuevosHorarios) => {
+        if (modoEdicion === 'especial') {
+            setHorariosEspeciales(prev => prev.map(periodo => (
+                periodo.id === especialSeleccionadoId
+                    ? { ...periodo, horarios_por_dia: nuevosHorarios }
+                    : periodo
+            )));
+        } else {
+            setHorariosPorDia(nuevosHorarios);
+        }
+    };
 
     // Generar todas las horas posibles cada 30 minutos (de 0 a 23:30)
     const todasLasHoras = React.useMemo(() => {
@@ -44,12 +78,21 @@ function HorariosPorDiaPanel({ profesionalId, profesionalNombre, onGuardar, onCa
             console.log('📋 Horarios cargados por día:', horarios);
             
             // Inicializar todos los días con array vacío si no existen
-            const horariosInicializados = {};
+            const horariosInicializados = crearHorariosVacios();
             dias.forEach(dia => {
                 horariosInicializados[dia.id] = horarios[dia.id] || [];
             });
             
             setHorariosPorDia(horariosInicializados);
+            const especiales = Array.isArray(horarios.__especiales) ? horarios.__especiales : [];
+            setHorariosEspeciales(especiales.map(periodo => ({
+                ...periodo,
+                id: periodo.id || `especial-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                horarios_por_dia: {
+                    ...crearHorariosVacios(),
+                    ...(periodo.horarios_por_dia || {})
+                }
+            })));
             
             // Actualizar horas disponibles para el día seleccionado
             setHorasDisponibles(horariosInicializados[diaSeleccionado] || []);
@@ -64,11 +107,46 @@ function HorariosPorDiaPanel({ profesionalId, profesionalNombre, onGuardar, onCa
 
     const handleDiaChange = (diaId) => {
         setDiaSeleccionado(diaId);
-        setHorasDisponibles(horariosPorDia[diaId] || []);
+        setHorasDisponibles(getHorariosEditables()[diaId] || []);
+    };
+
+    React.useEffect(() => {
+        setHorasDisponibles(getHorariosEditables()[diaSeleccionado] || []);
+    }, [modoEdicion, especialSeleccionadoId, horariosEspeciales, horariosPorDia, diaSeleccionado]);
+
+    const crearHorarioEspecial = () => {
+        const nuevo = {
+            id: `especial-${Date.now()}`,
+            nombre: 'Horario especial',
+            fecha_inicio: '',
+            fecha_fin: '',
+            horarios_por_dia: crearHorariosVacios()
+        };
+
+        setHorariosEspeciales(prev => [...prev, nuevo]);
+        setEspecialSeleccionadoId(nuevo.id);
+        setModoEdicion('especial');
+    };
+
+    const actualizarHorarioEspecial = (campo, valor) => {
+        setHorariosEspeciales(prev => prev.map(periodo => (
+            periodo.id === especialSeleccionadoId ? { ...periodo, [campo]: valor } : periodo
+        )));
+    };
+
+    const eliminarHorarioEspecial = () => {
+        if (!especialSeleccionadoId) return;
+        if (!confirm('Eliminar este horario especial?')) return;
+
+        setHorariosEspeciales(prev => prev.filter(periodo => periodo.id !== especialSeleccionadoId));
+        setEspecialSeleccionadoId('');
+        setModoEdicion('normal');
     };
 
     const toggleHora = (indice) => {
-        const nuevasHoras = [...(horariosPorDia[diaSeleccionado] || [])];
+        if (modoEdicion === 'especial' && !especialSeleccionadoId) return;
+        const horariosActuales = getHorariosEditables();
+        const nuevasHoras = [...(horariosActuales[diaSeleccionado] || [])];
         
         if (nuevasHoras.includes(indice)) {
             // Quitar hora
@@ -81,60 +159,71 @@ function HorariosPorDiaPanel({ profesionalId, profesionalNombre, onGuardar, onCa
         }
         
         const nuevosHorarios = {
-            ...horariosPorDia,
+            ...horariosActuales,
             [diaSeleccionado]: nuevasHoras
         };
         
-        setHorariosPorDia(nuevosHorarios);
+        setHorariosEditables(nuevosHorarios);
         setHorasDisponibles(nuevasHoras);
     };
 
     const toggleTodasLasHoras = () => {
-        const horasActuales = horariosPorDia[diaSeleccionado] || [];
+        if (modoEdicion === 'especial' && !especialSeleccionadoId) return;
+        const horariosActuales = getHorariosEditables();
+        const horasActuales = horariosActuales[diaSeleccionado] || [];
         
         if (horasActuales.length === todasLasHoras.length) {
             // Quitar todas
             const nuevosHorarios = {
-                ...horariosPorDia,
+                ...horariosActuales,
                 [diaSeleccionado]: []
             };
-            setHorariosPorDia(nuevosHorarios);
+            setHorariosEditables(nuevosHorarios);
             setHorasDisponibles([]);
         } else {
             // Agregar todas
             const todas = todasLasHoras.map(h => h.indice);
             const nuevosHorarios = {
-                ...horariosPorDia,
+                ...horariosActuales,
                 [diaSeleccionado]: todas
             };
-            setHorariosPorDia(nuevosHorarios);
+            setHorariosEditables(nuevosHorarios);
             setHorasDisponibles(todas);
         }
     };
 
     const copiarHorarios = (desdeDia) => {
-        const horasACopiar = horariosPorDia[desdeDia] || [];
+        if (modoEdicion === 'especial' && !especialSeleccionadoId) return;
+        const horariosActuales = getHorariosEditables();
+        const horasACopiar = horariosActuales[desdeDia] || [];
         const nuevosHorarios = {
-            ...horariosPorDia,
+            ...horariosActuales,
             [diaSeleccionado]: [...horasACopiar]
         };
-        setHorariosPorDia(nuevosHorarios);
+        setHorariosEditables(nuevosHorarios);
         setHorasDisponibles(horasACopiar);
     };
 
     const limpiarDia = () => {
+        if (modoEdicion === 'especial' && !especialSeleccionadoId) return;
+        const horariosActuales = getHorariosEditables();
         const nuevosHorarios = {
-            ...horariosPorDia,
+            ...horariosActuales,
             [diaSeleccionado]: []
         };
-        setHorariosPorDia(nuevosHorarios);
+        setHorariosEditables(nuevosHorarios);
         setHorasDisponibles([]);
     };
 
     const handleGuardar = async () => {
         try {
-            await window.salonConfig.guardarHorariosPorDia(profesionalId, horariosPorDia);
-            onGuardar(horariosPorDia);
+            const especialesValidos = horariosEspeciales.filter(periodo => periodo.fecha_inicio && periodo.fecha_fin);
+            const horariosConEspeciales = {
+                ...horariosPorDia,
+                __especiales: especialesValidos
+            };
+            await window.salonConfig.guardarHorariosPorDia(profesionalId, horariosConEspeciales);
+            onGuardar(horariosConEspeciales);
         } catch (error) {
             console.error('Error guardando:', error);
         }
@@ -155,12 +244,73 @@ function HorariosPorDiaPanel({ profesionalId, profesionalNombre, onGuardar, onCa
                 📅 Horarios de {profesionalNombre} por día
             </h3>
             
+            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-4">
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={() => setModoEdicion('normal')}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold ${modoEdicion === 'normal' ? 'bg-amber-600 text-white' : 'bg-white text-amber-700 border border-amber-300'}`}
+                    >
+                        Horario normal
+                    </button>
+                    <button
+                        onClick={() => {
+                            setModoEdicion('especial');
+                            if (!especialSeleccionadoId && horariosEspeciales.length > 0) {
+                                setEspecialSeleccionadoId(horariosEspeciales[0].id);
+                            }
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold ${modoEdicion === 'especial' ? 'bg-amber-600 text-white' : 'bg-white text-amber-700 border border-amber-300'}`}
+                    >
+                        Horarios especiales ({horariosEspeciales.length})
+                    </button>
+                    <button
+                        onClick={crearHorarioEspecial}
+                        className="px-4 py-2 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700"
+                    >
+                        Crear especial
+                    </button>
+                </div>
+
+                {modoEdicion === 'especial' && (
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Periodo</label>
+                            <select value={especialSeleccionadoId} onChange={(e) => setEspecialSeleccionadoId(e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm">
+                                <option value="">Seleccionar</option>
+                                {horariosEspeciales.map(periodo => (
+                                    <option key={periodo.id} value={periodo.id}>{periodo.nombre || 'Horario especial'}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Nombre</label>
+                            <input type="text" value={getEspecialSeleccionado()?.nombre || ''} onChange={(e) => actualizarHorarioEspecial('nombre', e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Mayo especial" disabled={!especialSeleccionadoId} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Desde</label>
+                            <input type="date" value={getEspecialSeleccionado()?.fecha_inicio || ''} onChange={(e) => actualizarHorarioEspecial('fecha_inicio', e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" disabled={!especialSeleccionadoId} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Hasta</label>
+                            <input type="date" value={getEspecialSeleccionado()?.fecha_fin || ''} onChange={(e) => actualizarHorarioEspecial('fecha_fin', e.target.value)} className="w-full border rounded-lg px-3 py-2 text-sm" disabled={!especialSeleccionadoId} />
+                        </div>
+                        <button onClick={eliminarHorarioEspecial} className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 disabled:opacity-50" disabled={!especialSeleccionadoId}>
+                            Eliminar
+                        </button>
+                    </div>
+                )}
+
+                {modoEdicion === 'especial' && !especialSeleccionadoId && (
+                    <p className="text-sm text-amber-700">Crea o selecciona un periodo especial para editar sus horarios.</p>
+                )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 {/* Panel izquierdo: Selector de días */}
                 <div className="md:col-span-1 space-y-2">
                     <h4 className="font-medium text-gray-700 mb-2">Días de la semana</h4>
                     {dias.map(dia => {
-                        const cantidadHoras = horariosPorDia[dia.id]?.length || 0;
+                        const cantidadHoras = getHorariosEditables()[dia.id]?.length || 0;
                         return (
                             <button
                                 key={dia.id}
@@ -231,7 +381,7 @@ function HorariosPorDiaPanel({ profesionalId, profesionalNombre, onGuardar, onCa
                                 .filter(d => d.id !== diaSeleccionado)
                                 .map(dia => (
                                     <option key={dia.id} value={dia.id}>
-                                        {dia.nombre} ({horariosPorDia[dia.id]?.length || 0} hs)
+                                        {dia.nombre} ({getHorariosEditables()[dia.id]?.length || 0} hs)
                                     </option>
                                 ))
                             }
@@ -270,7 +420,7 @@ function HorariosPorDiaPanel({ profesionalId, profesionalNombre, onGuardar, onCa
                 <h4 className="font-medium text-gray-700 mb-3">Resumen semanal:</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
                     {dias.map(dia => {
-                        const cantidad = horariosPorDia[dia.id]?.length || 0;
+                        const cantidad = getHorariosEditables()[dia.id]?.length || 0;
                         return (
                             <div key={dia.id} className="text-center p-2 bg-gray-50 rounded-lg">
                                 <div className="text-xs text-gray-500">{dia.nombre.substring(0, 3)}</div>
