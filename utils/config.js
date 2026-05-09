@@ -24,7 +24,9 @@ let configuracionGlobal = {
     duracion_turnos: 60,
     intervalo_entre_turnos: 0,
     modo_24h: false,
-    max_antelacion_dias: 30
+    max_antelacion_dias: 30,
+    min_antelacion_horas: 2,
+    min_cancelacion_horas: 1
 };
 
 let horariosProfesionales = {};
@@ -43,53 +45,6 @@ const indiceToHoraLegible = (indice) => {
 const horaToIndice = (horaStr) => {
     const [horas, minutos] = horaStr.split(':').map(Number);
     return horas * 2 + (minutos === 30 ? 1 : 0);
-};
-
-const DIAS_SEMANA_CONFIG = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-const CLAVE_HORARIOS_ESPECIALES = '__especiales';
-
-const normalizarHorariosPorDia = (horariosPorDia = {}) => {
-    const normalizados = {};
-    DIAS_SEMANA_CONFIG.forEach(dia => {
-        normalizados[dia] = Array.isArray(horariosPorDia[dia]) ? horariosPorDia[dia] : [];
-    });
-    return normalizados;
-};
-
-const getDiaSemanaDesdeFecha = (fechaStr) => {
-    if (!fechaStr) return null;
-    const [year, month, day] = fechaStr.split('-').map(Number);
-    const fecha = new Date(year, month - 1, day);
-    return DIAS_SEMANA_CONFIG[fecha.getDay()];
-};
-
-const getHorariosEspeciales = (horariosPorDia = {}) => {
-    return Array.isArray(horariosPorDia[CLAVE_HORARIOS_ESPECIALES])
-        ? horariosPorDia[CLAVE_HORARIOS_ESPECIALES]
-        : [];
-};
-
-const getHorarioEspecialParaFecha = (horariosPorDia = {}, fechaStr) => {
-    if (!fechaStr) return null;
-
-    return getHorariosEspeciales(horariosPorDia)
-        .filter(periodo => periodo && periodo.fecha_inicio && periodo.fecha_fin)
-        .find(periodo => fechaStr >= periodo.fecha_inicio && fechaStr <= periodo.fecha_fin) || null;
-};
-
-const getHorariosEfectivosPorFecha = (horariosPorDia = {}, fechaStr) => {
-    const periodoEspecial = getHorarioEspecialParaFecha(horariosPorDia, fechaStr);
-    if (periodoEspecial && periodoEspecial.horarios_por_dia) {
-        return {
-            horariosPorDia: normalizarHorariosPorDia(periodoEspecial.horarios_por_dia),
-            periodoEspecial
-        };
-    }
-
-    return {
-        horariosPorDia: normalizarHorariosPorDia(horariosPorDia),
-        periodoEspecial: null
-    };
 };
 
 // ============================================
@@ -151,6 +106,7 @@ async function cargarHorariosProfesionales() {
         (data || []).forEach(item => {
             horarios[item.profesional_id] = {
                 horariosPorDia: item.horarios_por_dia || {},
+                descansosPorDia: item.descansos_por_dia || {},
                 horas: item.horas || [],
                 dias: item.dias || []
             };
@@ -183,7 +139,9 @@ window.salonConfig = {
                 duracion_turnos: nuevaConfig.duracion_turnos || 60,
                 intervalo_entre_turnos: nuevaConfig.intervalo_entre_turnos || 0,
                 modo_24h: nuevaConfig.modo_24h || false,
-                max_antelacion_dias: nuevaConfig.max_antelacion_dias || 30
+                max_antelacion_dias: nuevaConfig.max_antelacion_dias || 30,
+                min_antelacion_horas: nuevaConfig.min_antelacion_horas ?? 2,
+                min_cancelacion_horas: nuevaConfig.min_cancelacion_horas ?? 1
             };
             
             console.log('📤 Datos a enviar:', datosAGuardar);
@@ -278,8 +236,31 @@ window.salonConfig = {
             return {};
         }
     },
+
+    getDescansosPorDia: async function(profesionalId) {
+        try {
+            const negocioId = getNegocioId();
+            const response = await fetch(
+                `${window.SUPABASE_URL}/rest/v1/horarios_profesionales?negocio_id=eq.${negocioId}&profesional_id=eq.${profesionalId}&select=descansos_por_dia`,
+                {
+                    headers: {
+                        'apikey': window.SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`
+                    }
+                }
+            );
+
+            if (!response.ok) return {};
+
+            const data = await response.json();
+            return data[0]?.descansos_por_dia || {};
+        } catch (error) {
+            console.error('Error cargando descansos:', error);
+            return {};
+        }
+    },
     
-    guardarHorariosPorDia: async function(profesionalId, horariosPorDia) {
+    guardarHorariosPorDia: async function(profesionalId, horariosPorDia, descansosPorDia = null) {
         try {
             const negocioId = getNegocioId();
             console.log(`💾 Guardando horarios por día para profesional ${profesionalId} (negocio: ${negocioId}):`, horariosPorDia);
@@ -302,13 +283,12 @@ window.salonConfig = {
             let body;
             
             const todasLasHoras = new Set();
-            DIAS_SEMANA_CONFIG.forEach(dia => {
-                const horasArray = Array.isArray(horariosPorDia[dia]) ? horariosPorDia[dia] : [];
+            Object.values(horariosPorDia).forEach(horasArray => {
                 horasArray.forEach(hora => todasLasHoras.add(hora));
             });
             const horasArray = Array.from(todasLasHoras).sort((a, b) => a - b);
             
-            const diasQueTrabajan = DIAS_SEMANA_CONFIG.filter(dia => (horariosPorDia[dia] || []).length > 0);
+            const diasQueTrabajan = Object.keys(horariosPorDia).filter(dia => horariosPorDia[dia].length > 0);
             
             if (existe && existe.length > 0) {
                 console.log('🔄 Actualizando registro existente ID:', existe[0].id);
@@ -316,6 +296,7 @@ window.salonConfig = {
                 method = 'PATCH';
                 body = JSON.stringify({
                     horarios_por_dia: horariosPorDia,
+                    ...(descansosPorDia ? { descansos_por_dia: descansosPorDia } : {}),
                     horas: horasArray,
                     dias: diasQueTrabajan
                 });
@@ -327,6 +308,7 @@ window.salonConfig = {
                     negocio_id: negocioId,
                     profesional_id: profesionalId,
                     horarios_por_dia: horariosPorDia,
+                    ...(descansosPorDia ? { descansos_por_dia: descansosPorDia } : {}),
                     horas: horasArray,
                     dias: diasQueTrabajan
                 });
@@ -355,6 +337,7 @@ window.salonConfig = {
             
             horariosProfesionales[profesionalId] = {
                 horariosPorDia: horariosPorDia,
+                descansosPorDia: descansosPorDia || horariosProfesionales[profesionalId]?.descansosPorDia || {},
                 horas: horasArray,
                 dias: diasQueTrabajan
             };
@@ -394,21 +377,13 @@ window.salonConfig = {
                     horas: data[0].horas || [],
                     dias: data[0].dias || [],
                     horariosPorDia: data[0].horarios_por_dia || {},
-                    horariosEspeciales: getHorariosEspeciales(data[0].horarios_por_dia || {})
+                    descansosPorDia: data[0].descansos_por_dia || {}
                 };
             }
-            return { horas: [], dias: [], horariosPorDia: {}, horariosEspeciales: [] };
+            return { horas: [], dias: [], horariosPorDia: {}, descansosPorDia: {} };
         } catch (error) {
-            return { horas: [], dias: [], horariosPorDia: {}, horariosEspeciales: [] };
+            return { horas: [], dias: [], horariosPorDia: {}, descansosPorDia: {} };
         }
-    },
-
-    getHorariosEfectivosPorFecha: function(horariosPorDia, fechaStr) {
-        return getHorariosEfectivosPorFecha(horariosPorDia, fechaStr);
-    },
-
-    getHorarioEspecialParaFecha: function(horariosPorDia, fechaStr) {
-        return getHorarioEspecialParaFecha(horariosPorDia, fechaStr);
     },
     
     guardarHorariosProfesional: async function(profesionalId, horarios) {

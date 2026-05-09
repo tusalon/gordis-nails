@@ -29,7 +29,6 @@ function ClientApp() {
     const [bookingConfirmed, setBookingConfirmed] = React.useState(null);
     const [userRol, setUserRol] = React.useState('cliente');
     const [history, setHistory] = React.useState(['auth']);
-    const [horariosPorDia, setHorariosPorDia] = React.useState({});
 
     // ============================================
     // DETECTAR SESIÓN AL INICIAR Y REDIRIGIR SEGÚN ROL
@@ -104,16 +103,7 @@ function ClientApp() {
     // ============================================
     // FUNCIONES DE SCROLL AUTOMÁTICO
     // ============================================
-    React.useEffect(() => {
-        if (selectedService) {
-            setTimeout(() => {
-                document.getElementById('profesional-section')?.scrollIntoView({ 
-                    behavior: 'smooth', 
-                    block: 'center' 
-                });
-            }, 300);
-        }
-    }, [selectedService]);
+    // No bajamos automaticamente al profesional: permite seleccionar varios servicios primero.
 
     React.useEffect(() => {
         if (selectedProfesional) {
@@ -157,7 +147,15 @@ function ClientApp() {
         setSelectedProfesional(null);
         setSelectedDate('');
         setSelectedTime('');
-        setHorariosPorDia({});
+    };
+
+    const handleContinueServices = () => {
+        setTimeout(() => {
+            document.getElementById('profesional-section')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }, 80);
     };
 
     const handleLogout = () => {
@@ -238,6 +236,7 @@ function ClientApp() {
                             <ServiceSelection 
                                 onSelect={handleServiceSelect} 
                                 selectedService={selectedService}
+                                onContinue={handleContinueServices}
                             />
                             
                             {/* SECCIÓN 2: PROFESIONALES - CON selectedService */}
@@ -258,8 +257,6 @@ function ClientApp() {
                                         onDateSelect={setSelectedDate} 
                                         selectedDate={selectedDate}
                                         profesional={selectedProfesional}
-                                    service={selectedService}
-                                        onHorariosCargados={setHorariosPorDia}
                                     />
                                 </div>
                             )}
@@ -273,7 +270,6 @@ function ClientApp() {
                                         profesional={selectedProfesional}
                                         onTimeSelect={setSelectedTime}
                                         selectedTime={selectedTime}
-                                    horariosPorDia={horariosPorDia}
                                     />
                                 </div>
                             )}

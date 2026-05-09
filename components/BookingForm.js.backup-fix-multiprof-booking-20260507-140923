@@ -6,6 +6,32 @@
 function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cliente }) {
     const [submitting, setSubmitting] = React.useState(false);
     const [error, setError] = React.useState(null);
+    const getBookingAssignments = () => {
+        if (profesional?.assignments?.length) {
+            return profesional.assignments.filter(a => a.servicio && a.profesional);
+        }
+        const servicios = Array.isArray(service.items) ? service.items : [service];
+        return servicios.map(servicio => ({ servicio, profesional }));
+    };
+
+    const minutesToTime = (minutes) => {
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    };
+
+    const timeToMinutesLocal = (timeStr) => {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        return hours * 60 + minutes;
+    };
+
+    const getTotalDuracion = () => {
+        return getBookingAssignments().reduce((total, asignacion) => total + (parseInt(asignacion.servicio.duracion) || 0), 0) || service.duracion;
+    };
+
+    const getProfesionalesLabel = () => {
+        return Array.from(new Set(getBookingAssignments().map(a => a.profesional.nombre))).join(' + ');
+    };
 
     // ============================================
     // FUNCIÓN PARA PARTIR LÍNEAS LARGAS (RFC 5545)
@@ -321,7 +347,7 @@ END:VCALENDAR`;
                         
                         <div className="flex items-center gap-3 text-pink-700">
                             <span className="text-2xl">👩‍🎨</span>
-                            <span>Con: <strong>{profesional.nombre}</strong></span>
+                            <span>Con: <strong>{getProfesionalesLabel()}</strong></span>
                         </div>
                         
                         <div className="flex items-center gap-3 text-pink-700">
@@ -330,7 +356,7 @@ END:VCALENDAR`;
                         </div>
                         <div className="flex items-center gap-3 text-pink-700">
                             <span className="text-2xl">⏰</span>
-                            <span>{window.formatTo12Hour ? window.formatTo12Hour(time) : time} ({service.duracion} min)</span>
+                            <span>{window.formatTo12Hour ? window.formatTo12Hour(time) : time} ({getTotalDuracion()} min)</span>
                         </div>
                     </div>
 
