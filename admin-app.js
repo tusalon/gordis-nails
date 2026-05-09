@@ -975,7 +975,7 @@ function AdminApp() {
         if (!nuevaReservaData.cliente_nombre || !nuevaReservaData.cliente_whatsapp || 
             !nuevaReservaData.servicio || !nuevaReservaData.profesional_id || 
             !nuevaReservaData.fecha || !nuevaReservaData.hora_inicio) {
-            alert('CompletA todos los campos');
+            alert('Completá todos los campos');
             return;
         }
 
@@ -998,7 +998,7 @@ function AdminApp() {
             
             const bookingData = {
                 cliente_nombre: nuevaReservaData.cliente_nombre,
-                cliente_whatsapp: `53${nuevaReservaData.cliente_whatsapp.replace(/\D/g, '')}`,
+                cliente_whatsapp: `53${nuevaReservaData.cliente_whatsapp.replace(/\D/g, '').replace(/^53(?=\d{8,}$)/, '')}`,
                 servicio: nuevaReservaData.servicio,
                 duracion: servicio.duracion,
                 profesional_id: nuevaReservaData.profesional_id,
@@ -1047,6 +1047,15 @@ function AdminApp() {
             }
             
             if (result.success && result.data) {
+                if (!reservaEditando && typeof window.crearCliente === 'function') {
+                    try {
+                        await window.crearCliente(bookingData.cliente_nombre, bookingData.cliente_whatsapp);
+                        await loadClientesRegistrados?.();
+                    } catch (clienteError) {
+                        console.error('Error registrando cliente manual:', clienteError);
+                    }
+                }
+
                 alert(`Reserva creada exitosamente como "${result.data.estado}"`);
                 
                 try {
@@ -1067,7 +1076,7 @@ function AdminApp() {
                     }
                 } catch (whatsappError) {
                     console.error('Error enviando WhatsApp:', whatsappError);
-                    alert('as i  Reserva creada, pero hubo un error al enviar el mensaje al cliente.');
+                    alert('Reserva creada, pero hubo un error al enviar el mensaje al cliente.');
                 }
                 
                 setShowNuevaReservaModal(false);
@@ -1153,7 +1162,7 @@ function AdminApp() {
             setNuevoBloqueo({ nombre: '', whatsapp: '', motivo: '' });
             await loadClientesRegistrados();
             await loadClientesBloqueados();
-            alert('Cliente bloqueado. Ya no podra registrarse ni reservar.');
+            alert('Cliente bloqueado. Ya no podrá registrarse ni reservar.');
         } else {
             alert('No se pudo bloquear el cliente. Revisa que la tabla clientes_bloqueados exista en Supabase.');
         }
@@ -1171,7 +1180,7 @@ function AdminApp() {
     };
 
     const handleEliminarCliente = async (whatsapp) => {
-        if (!confirm('ASeguro que querAs eliminar este cliente? PerderA el acceso a la app.')) return;
+        if (!confirm('¿Seguro que querés eliminar este cliente? Perderá el acceso a la app.')) return;
         console.log('Yi  Eliminando cliente:', whatsapp);
         try {
             if (typeof window.eliminarCliente !== 'function') {
@@ -1269,7 +1278,7 @@ function AdminApp() {
     // FUNCIÓN PARA CONFIRMAR PAGO
     // ============================================
     const confirmarPago = async (id, bookingData) => {
-        if (!confirm(`Confirmar que se recibio el pago de ${bookingData.cliente_nombre}? El turno pasara a "Reservado".`)) return;
+        if (!confirm(`Confirmar que se recibió el pago de ${bookingData.cliente_nombre}? El turno pasará a "Reservado".`)) return;
 
         try {
             console.log(`Confirmando pago para reserva ${id}`);
@@ -1372,7 +1381,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
     // HANDLE CANCEL
     // ============================================
     const handleCancel = async (id, bookingData) => {
-        if (!confirm(`ACancelar reserva de ${bookingData.cliente_nombre}?`)) return;
+        if (!confirm(`¿Cancelar reserva de ${bookingData.cliente_nombre}?`)) return;
         
         const ok = await cancelBooking(id);
         if (ok) {
@@ -1401,7 +1410,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
             localStorage.removeItem('clienteAuth');
             localStorage.removeItem('negocioId');
             
-            console.log('Sesion cerrada, redirigiendo a index.html');
+            console.log('Sesión cerrada, redirigiendo a index.html');
             window.location.href = 'index.html';
         }
     };
@@ -1720,7 +1729,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Cliente *</label>
-                                    <input type="text" value={nuevaReservaData.cliente_nombre} onChange={(e) => setNuevaReservaData({...nuevaReservaData, cliente_nombre: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Juan Perez" />
+                                    <input type="text" value={nuevaReservaData.cliente_nombre} onChange={(e) => setNuevaReservaData({...nuevaReservaData, cliente_nombre: e.target.value})} className="w-full border rounded-lg px-3 py-2" placeholder="Ej: Juan Pérez" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp del Cliente *</label>
@@ -2300,7 +2309,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                                                 <p><span className="font-medium">Cliente:</span> {b.cliente_nombre}</p>
                                                 <p><span className="font-medium">WhatsApp:</span> {b.cliente_whatsapp}</p>
                                                 <p><span className="font-medium">Servicio:</span> {b.servicio}</p>
-                                                <p><span className="font-medium">YaYZ  Profesional:</span> {b.profesional_nombre || b.trabajador_nombre}</p>
+                                                <p><span className="font-medium">👩‍🎨 Profesional:</span> {b.profesional_nombre || b.trabajador_nombre}</p>
                                             </div>
                                             <div className="flex justify-between items-center mt-3 pt-2 border-t">
                                                 <span className={`px-2 py-1 rounded-full text-xs font-semibold ${b.estado === 'Reservado' ? 'bg-pink-100 text-pink-700' : b.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-700' : b.estado === 'Completado' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -2314,7 +2323,7 @@ Cualquier cambio, podés cancelarlo desde la app con hasta 1 hora de anticipaci�
                                                         <button onClick={() => confirmarPago(b.id, b)} className="px-3 py-1 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600">Confirmar pago</button>
                                                     )}
                                                     {b.estado === 'Reservado' && (
-                                                        <button onClick={() => handleCancel(b.id, b)} className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600">a Cancelar</button>
+                                                        <button onClick={() => handleCancel(b.id, b)} className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600">❌ Cancelar</button>
                                                     )}
                                                 </div>
                                             </div>
