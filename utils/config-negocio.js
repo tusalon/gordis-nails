@@ -140,7 +140,7 @@ window.getEmailNegocio = async function() {
  */
 window.getInstagram = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.instagram || 'gordis_nails';
+    return config?.instagram || '';
 };
 
 /**
@@ -148,7 +148,7 @@ window.getInstagram = async function() {
  */
 window.getFacebook = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.facebook || 'gordis.nails';
+    return config?.facebook || '';
 };
 
 /**
@@ -156,7 +156,7 @@ window.getFacebook = async function() {
  */
 window.getHorarioAtencion = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.horario_atencion || 'Mar-Sáb 9:00-21:00, Dom cerrado';
+    return config?.horario_atencion || '';
 };
 
 /**
@@ -164,7 +164,7 @@ window.getHorarioAtencion = async function() {
  */
 window.getMensajeBienvenida = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.mensaje_bienvenida || '👋 Bienvenida a GordisNailsbySandra - Tu espacio de belleza';
+    return config?.mensaje_bienvenida || '¡Bienvenida a GordisNailsbySandra!';
 };
 
 /**
@@ -172,7 +172,7 @@ window.getMensajeBienvenida = async function() {
  */
 window.getMensajeConfirmacion = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.mensaje_confirmacion || '✅ Reserva confirmada en GordisNailsbySandra';
+    return config?.mensaje_confirmacion || 'Tu turno ha sido reservado con éxito';
 };
 
 /**
@@ -180,7 +180,7 @@ window.getMensajeConfirmacion = async function() {
  */
 window.getNtfyTopic = async function() {
     const config = await window.cargarConfiguracionNegocio();
-    return config?.ntfy_topic || 'gordis-nails-notifications';
+    return config?.ntfy_topic || 'gordis-nails';
 };
 
 /**
