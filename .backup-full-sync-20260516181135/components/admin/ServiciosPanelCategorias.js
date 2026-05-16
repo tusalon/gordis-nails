@@ -20,26 +20,8 @@ function categoriaIcono(categoria) {
     return categoria?.icono || '⭐';
 }
 
-function categoriaCoincideServicio(categoria, valorNormalizado) {
-    if (!categoria || !valorNormalizado) return false;
-    return [categoriaId(categoria), categoria.id, categoria.slug, categoriaNombre(categoria)]
-        .some(valor => normalizarTextoServicio(valor) === valorNormalizado);
-}
-
-function resolverCategoriaGuardadaServicio(valor, categorias = []) {
-    const normalizada = normalizarTextoServicio(valor);
-    if (!normalizada) return '';
-
-    const categoria = categorias.find(item => categoriaCoincideServicio(item, normalizada));
-    if (categoria) return categoriaId(categoria);
-
-    const conocidas = ['manicura', 'pedicura', 'faciales', 'barberia', 'cejas', 'combos', 'otros'];
-    return conocidas.includes(normalizada) ? normalizada : '';
-}
-
 function inferirCategoriaServicio(servicio, categorias = []) {
-    const categoriaGuardada = resolverCategoriaGuardadaServicio(servicio?.categoria, categorias);
-    if (categoriaGuardada) return categoriaGuardada;
+    if (servicio?.categoria) return servicio.categoria;
 
     const texto = normalizarTextoServicio(`${servicio?.nombre || ''} ${servicio?.descripcion || ''}`);
     if (texto.includes('pedic') || texto.includes('pie')) return 'pedicura';
@@ -62,12 +44,10 @@ function ServiciosPanel() {
     const [mostrarForm, setMostrarForm] = React.useState(false);
     const [editando, setEditando] = React.useState(null);
     const [cargando, setCargando] = React.useState(true);
-    const datosCargadosRef = React.useRef(false);
     const [busqueda, setBusqueda] = React.useState('');
     const [categoriaActiva, setCategoriaActiva] = React.useState('todos');
     const [servicioParaAsignar, setServicioParaAsignar] = React.useState(null);
     const [mostrarCategorias, setMostrarCategorias] = React.useState(false);
-    const formularioRef = React.useRef(null);
 
     React.useEffect(() => {
         cargarDatos();
@@ -83,8 +63,7 @@ function ServiciosPanel() {
     }, []);
 
     const cargarDatos = async () => {
-        const mostrarIndicador = !datosCargadosRef.current;
-        if (mostrarIndicador) setCargando(true);
+        setCargando(true);
         try {
             const [listaServicios, listaCategorias] = await Promise.all([
                 window.salonServicios?.getAll(false) || [],
@@ -95,8 +74,7 @@ function ServiciosPanel() {
         } catch (error) {
             console.error('Error cargando servicios/categorias:', error);
         } finally {
-            datosCargadosRef.current = true;
-            if (mostrarIndicador) setCargando(false);
+            setCargando(false);
         }
     };
 
@@ -105,12 +83,6 @@ function ServiciosPanel() {
         ...categorias.filter(c => c.activo !== false),
         { id: 'inactivos', slug: 'inactivos', nombre: 'Inactivos', icono: '⏸️', activo: true }
     ]), [categorias]);
-
-    React.useEffect(() => {
-        if (!categoriasFiltro.some(categoria => categoriaId(categoria) === categoriaActiva)) {
-            setCategoriaActiva('todos');
-        }
-    }, [categoriasFiltro, categoriaActiva]);
 
     const serviciosFiltrados = React.useMemo(() => {
         const q = normalizarTextoServicio(busqueda);
@@ -161,14 +133,6 @@ function ServiciosPanel() {
         await cargarDatos();
     };
 
-    const abrirFormularioServicio = (servicio = null) => {
-        setEditando(servicio);
-        setMostrarForm(true);
-        setTimeout(() => {
-            formularioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 80);
-    };
-
     if (cargando) {
         return (
             <div className="bg-white rounded-xl shadow-sm p-6 text-center py-12">
@@ -194,7 +158,7 @@ function ServiciosPanel() {
                         <button onClick={() => setMostrarCategorias(!mostrarCategorias)} className="border border-pink-200 text-pink-700 px-4 py-3 rounded-lg hover:bg-pink-50 font-semibold">
                             ⚙️ Categorías
                         </button>
-                        <button onClick={() => abrirFormularioServicio()} className="bg-pink-600 text-white px-4 py-3 rounded-lg hover:bg-pink-700 font-semibold shadow-sm">
+                        <button onClick={() => { setEditando(null); setMostrarForm(true); }} className="bg-pink-600 text-white px-4 py-3 rounded-lg hover:bg-pink-700 font-semibold shadow-sm">
                             + Nuevo servicio
                         </button>
                     </div>
@@ -242,14 +206,12 @@ function ServiciosPanel() {
             )}
 
             {mostrarForm && (
-                <div ref={formularioRef} className="scroll-mt-4">
-                    <ServicioFormCategorias
-                        servicio={editando}
-                        categorias={categorias}
-                        onGuardar={guardarServicio}
-                        onCancelar={() => { setMostrarForm(false); setEditando(null); }}
-                    />
-                </div>
+                <ServicioFormCategorias
+                    servicio={editando}
+                    categorias={categorias}
+                    onGuardar={guardarServicio}
+                    onCancelar={() => { setMostrarForm(false); setEditando(null); }}
+                />
             )}
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
@@ -282,7 +244,7 @@ function ServiciosPanel() {
                                     </div>
                                     <div className="flex gap-1 shrink-0">
                                         <button onClick={() => setServicioParaAsignar(servicio)} className="w-9 h-9 rounded-lg hover:bg-purple-50 text-purple-600" title="Asignar profesionales">👥</button>
-                                        <button onClick={() => abrirFormularioServicio(servicio)} className="w-9 h-9 rounded-lg hover:bg-blue-50 text-blue-600" title="Editar">✏️</button>
+                                        <button onClick={() => { setEditando(servicio); setMostrarForm(true); }} className="w-9 h-9 rounded-lg hover:bg-blue-50 text-blue-600" title="Editar">✏️</button>
                                         <button onClick={() => duplicarServicio(servicio)} className="w-9 h-9 rounded-lg hover:bg-amber-50 text-amber-600" title="Duplicar">📄</button>
                                         <button onClick={() => eliminarServicio(servicio.id)} className="w-9 h-9 rounded-lg hover:bg-red-50 text-red-600" title="Eliminar">🗑️</button>
                                     </div>

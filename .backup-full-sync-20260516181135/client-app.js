@@ -166,11 +166,6 @@ function ClientApp() {
         }, 150);
     };
 
-    const handleNoAvailability = React.useCallback(() => {
-        setSelectedDate('');
-        setSelectedTime('');
-    }, []);
-
     const handleLogout = () => {
         localStorage.removeItem('clienteAuth');
         setCliente(null);
@@ -277,7 +272,6 @@ function ClientApp() {
                                         onDateSelect={setSelectedDate} 
                                         selectedDate={selectedDate}
                                         profesional={selectedProfesional?.esMultiple ? selectedProfesional.asignaciones[0]?.profesional : selectedProfesional}
-                                        profesionalCompleto={selectedProfesional}
                                         service={selectedService}
                                         onHorariosCargados={setHorariosPorDia}
                                     />
@@ -294,7 +288,6 @@ function ClientApp() {
                                             profesional={selectedProfesional}
                                             onTimeSelect={setSelectedTime}
                                             selectedTime={selectedTime}
-                                            onNoAvailability={handleNoAvailability}
                                         />
                                     ) : (
                                         <TimeSlots

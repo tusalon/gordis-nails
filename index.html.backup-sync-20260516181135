@@ -78,13 +78,13 @@
     <script src="components/Header.js" type="text/babel"></script>
     <script src="components/ServiceSelection.js" type="text/babel"></script>
     <script src="components/ServiceSelectionTabs.js" type="text/babel"></script>
-    <script src="components/ServiceSelectionCategorias.js?v=20260515-categorias-normalizadas" type="text/babel"></script>
+    <script src="components/ServiceSelectionCategorias.js" type="text/babel"></script>
     <script src="components/ProfesionalSelector.js" type="text/babel"></script>
     <script src="components/MultiProfesionalSelector.js" type="text/babel"></script>
-    <script src="components/Calendar.js?v=20260516-horarios-flexibles" type="text/babel"></script>
-    <script src="components/TimeSlots.js?v=20260516-horarios-flexibles" type="text/babel"></script>
-    <script src="components/MultiTimeSlots.js?v=20260516-horarios-flexibles" type="text/babel"></script>
-    <script src="components/BookingForm.js?v=20260516-horarios-flexibles" type="text/babel"></script>
+    <script src="components/Calendar.js" type="text/babel"></script>
+    <script src="components/TimeSlots.js" type="text/babel"></script>
+    <script src="components/MultiTimeSlots.js" type="text/babel"></script>
+    <script src="components/BookingForm.js" type="text/babel"></script>
     <script src="components/Confirmation.js" type="text/babel"></script>
     <script src="components/WelcomeScreen.js" type="text/babel"></script>
     <script src="components/WhatsAppButton.js" type="text/babel"></script>
@@ -93,7 +93,7 @@
     <script src="components/InstallButton.js" type="text/babel"></script>
     
     <!-- App de clientes -->
-    <script src="client-app.js?v=20260515-disponibilidad-real" type="text/babel"></script>
+    <script src="client-app.js" type="text/babel"></script>
     
     <script>
         // Actualizar título dinámico desde la base de datos

@@ -1,6 +1,6 @@
 // components/MultiTimeSlots.js - horarios secuenciales para varios servicios/profesionales
 
-function MultiTimeSlots({ service, date, profesional, onTimeSelect, selectedTime, onNoAvailability }) {
+function MultiTimeSlots({ service, date, profesional, onTimeSelect, selectedTime }) {
     const [slots, setSlots] = React.useState([]);
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState(null);
@@ -17,28 +17,6 @@ function MultiTimeSlots({ service, date, profesional, onTimeSelect, selectedTime
     const timeToMinutes = (timeStr) => {
         const [hours, minutes] = String(timeStr || '00:00').split(':').map(Number);
         return (hours || 0) * 60 + (minutes || 0);
-    };
-
-    const variantesHorarioPermitido = (timeStr) => {
-        const partes = String(timeStr || '').trim().split(':');
-        if (partes.length < 2) return [];
-        const hours = parseInt(partes[0], 10);
-        const minutes = parseInt(partes[1], 10);
-        if (Number.isNaN(hours) || Number.isNaN(minutes)) return [];
-
-        const normal = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-        const variantes = [normal];
-        if (hours >= 1 && hours <= 7) {
-            variantes.push(`${String(hours + 12).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
-        }
-        return variantes;
-    };
-
-    const servicioPermiteHorario = (servicio, slot) => {
-        const permitidos = servicio?.horarios_permitidos || [];
-        if (!permitidos.length) return true;
-        const normalizados = new Set(permitidos.flatMap(variantesHorarioPermitido));
-        return normalizados.has(slot);
     };
 
     const minutesToTime = (minutes) => {
@@ -61,33 +39,29 @@ function MultiTimeSlots({ service, date, profesional, onTimeSelect, selectedTime
         });
     };
 
-    const estaDentroBloqueTrabajo = (inicio, fin, indicesDelDia = [], duracionTurno = 60, intervaloTurnos = 0) => {
+    const estaDentroHorarioTrabajo = (inicio, fin, indicesDelDia = []) => {
         if (!indicesDelDia.length) return false;
 
         const minutosTrabajo = indicesDelDia
             .map(indice => timeToMinutes(indiceToHoraLegible(indice)))
             .sort((a, b) => a - b);
 
-        const bloquesBase = minutosTrabajo.map((minuto, index) => {
-            const siguiente = minutosTrabajo[index + 1];
-            const anterior = minutosTrabajo[index - 1];
-            return {
-                inicio: minuto,
-                fin: siguiente ? Math.max(siguiente, minuto + duracionTurno) : 24 * 60,
-                conectaAnterior: anterior !== undefined && minuto - anterior <= duracionTurno + intervaloTurnos
-            };
-        });
-
         const bloques = [];
-        bloquesBase.forEach(bloque => {
-            const ultimo = bloques[bloques.length - 1];
-            if (ultimo && bloque.conectaAnterior) {
-                ultimo.fin = Math.max(ultimo.fin, bloque.fin);
-            } else {
-                bloques.push({ inicio: bloque.inicio, fin: bloque.fin });
-            }
-        });
+        let bloqueInicio = minutosTrabajo[0];
+        let bloqueFin = minutosTrabajo[0] + 30;
 
+        for (let i = 1; i < minutosTrabajo.length; i++) {
+            const minuto = minutosTrabajo[i];
+            if (minuto <= bloqueFin) {
+                bloqueFin = Math.max(bloqueFin, minuto + 30);
+            } else {
+                bloques.push({ inicio: bloqueInicio, fin: bloqueFin });
+                bloqueInicio = minuto;
+                bloqueFin = minuto + 30;
+            }
+        }
+
+        bloques.push({ inicio: bloqueInicio, fin: bloqueFin });
         return bloques.some(bloque => inicio >= bloque.inicio && fin <= bloque.fin);
     };
 
@@ -99,8 +73,6 @@ function MultiTimeSlots({ service, date, profesional, onTimeSelect, selectedTime
             try {
                 const config = window.salonConfig ? await window.salonConfig.get() : {};
                 const minHoras = config?.min_antelacion_horas ?? 2;
-                const duracionTurno = Number(config?.duracion_turnos || 60);
-                const intervaloTurnos = Number(config?.intervalo_entre_turnos || 0);
                 setMinAntelacionHoras(minHoras);
 
                 const [year, month, day] = date.split('-').map(Number);
@@ -125,7 +97,7 @@ function MultiTimeSlots({ service, date, profesional, onTimeSelect, selectedTime
                 let baseSlots = (datos[0].horarios[diaSemana] || []).map(indiceToHoraLegible);
                 const primerServicio = datos[0].servicio;
                 if (primerServicio.horarios_permitidos?.length) {
-                    baseSlots = baseSlots.filter(slot => servicioPermiteHorario(primerServicio, slot));
+                    baseSlots = baseSlots.filter(slot => primerServicio.horarios_permitidos.includes(slot));
                 }
 
                 const esHoy = date === getCurrentLocalDate();
@@ -143,11 +115,11 @@ function MultiTimeSlots({ service, date, profesional, onTimeSelect, selectedTime
                         const fin = inicio + duracion;
                         const indicesDelDia = item.horarios[diaSemana] || [];
 
-                        if (!estaDentroBloqueTrabajo(inicio, fin, indicesDelDia, duracionTurno, intervaloTurnos)) return false;
+                        if (!estaDentroHorarioTrabajo(inicio, fin, indicesDelDia)) return false;
 
                         // En una reserva multiple, solo la primera hora la elige la clienta.
                         // Los servicios siguientes empiezan automaticamente al terminar el anterior.
-                        if (index === 0 && !servicioPermiteHorario(item.servicio, minutesToTime(inicio))) return false;
+                        if (index === 0 && item.servicio.horarios_permitidos?.length && !item.servicio.horarios_permitidos.includes(minutesToTime(inicio))) return false;
 
                         if (slotTieneDescanso(inicio, fin, item.descansos[diaSemana] || [])) return false;
 
@@ -164,11 +136,7 @@ function MultiTimeSlots({ service, date, profesional, onTimeSelect, selectedTime
                     return true;
                 });
 
-                const slotsDisponibles = disponibles.sort();
-                setSlots(slotsDisponibles);
-                if (slotsDisponibles.length === 0 && onNoAvailability) {
-                    onNoAvailability();
-                }
+                setSlots(disponibles.sort());
             } catch (err) {
                 console.error('Error calculando horarios multiservicio:', err);
                 setError('Error al cargar horarios');
@@ -179,7 +147,7 @@ function MultiTimeSlots({ service, date, profesional, onTimeSelect, selectedTime
         };
 
         cargar();
-    }, [service, date, profesional, onNoAvailability]);
+    }, [service, date, profesional]);
 
     if (!service?.esMultiple || !date || !profesional?.esMultiple) return null;
 
@@ -202,7 +170,10 @@ function MultiTimeSlots({ service, date, profesional, onTimeSelect, selectedTime
             ) : error ? (
                 <div className="p-4 bg-pink-50 text-pink-600 rounded-lg text-sm border border-pink-200">{error}</div>
             ) : slots.length === 0 ? (
-                null
+                <div className="text-center p-8 bg-pink-50 rounded-xl border border-pink-200">
+                    <p className="text-pink-700 font-medium">No hay horarios disponibles para esta combinación.</p>
+                    <p className="text-sm text-pink-500 mt-1">Prueba otra fecha o cambia profesionales.</p>
+                </div>
             ) : (
                 <>
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 mt-4">

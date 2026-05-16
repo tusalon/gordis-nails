@@ -40,69 +40,6 @@ function BookingForm({ service, profesional, date, time, onSubmit, onCancel, cli
         });
     }
 
-    const indiceToHoraLegible = (indice) => {
-        const horas = Math.floor(indice / 2);
-        const minutos = indice % 2 === 0 ? '00' : '30';
-        return `${horas.toString().padStart(2, '0')}:${minutos}`;
-    };
-
-    const variantesHorarioPermitido = (timeStr) => {
-        const partes = String(timeStr || '').trim().split(':');
-        if (partes.length < 2) return [];
-        const hours = parseInt(partes[0], 10);
-        const minutes = parseInt(partes[1], 10);
-        if (Number.isNaN(hours) || Number.isNaN(minutes)) return [];
-
-        const normal = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-        const variantes = [normal];
-        if (hours >= 1 && hours <= 7) {
-            variantes.push(`${String(hours + 12).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`);
-        }
-        return variantes;
-    };
-
-    const servicioPermiteHorario = (servicio, slot) => {
-        const permitidos = servicio?.horarios_permitidos || [];
-        if (!permitidos.length) return true;
-        const normalizados = new Set(permitidos.flatMap(variantesHorarioPermitido));
-        return normalizados.has(slot);
-    };
-
-    const slotTieneDescanso = (slotStart, slotEnd, descansosDelDia = []) => {
-        return descansosDelDia.some(descanso => {
-            if (!descanso?.inicio || !descanso?.fin) return false;
-            const descansoStart = timeToMinutes(descanso.inicio);
-            const descansoEnd = timeToMinutes(descanso.fin);
-            return (slotStart < descansoEnd) && (slotEnd > descansoStart);
-        });
-    };
-
-    const estaDentroBloqueTrabajo = (inicio, fin, indicesDelDia = [], duracionTurno = 60, intervaloTurnos = 0) => {
-        if (!indicesDelDia.length) return false;
-        const minutosTrabajo = indicesDelDia
-            .map(indice => timeToMinutes(indiceToHoraLegible(indice)))
-            .sort((a, b) => a - b);
-        const bloquesBase = minutosTrabajo.map((minuto, index) => {
-            const siguiente = minutosTrabajo[index + 1];
-            const anterior = minutosTrabajo[index - 1];
-            return {
-                inicio: minuto,
-                fin: siguiente ? Math.max(siguiente, minuto + duracionTurno) : 24 * 60,
-                conectaAnterior: anterior !== undefined && minuto - anterior <= duracionTurno + intervaloTurnos
-            };
-        });
-        const bloques = [];
-        bloquesBase.forEach(bloque => {
-            const ultimo = bloques[bloques.length - 1];
-            if (ultimo && bloque.conectaAnterior) {
-                ultimo.fin = Math.max(ultimo.fin, bloque.fin);
-            } else {
-                bloques.push({ inicio: bloque.inicio, fin: bloque.fin });
-            }
-        });
-        return bloques.some(bloque => inicio >= bloque.inicio && fin <= bloque.fin);
-    };
-
     // ============================================
     // FORMATEAR FECHA LOCAL (NO UTC)
     // ============================================
@@ -266,16 +203,12 @@ END:VCALENDAR`;
                 const configNegocio = await window.cargarConfiguracionNegocio();
                 const configGlobal = window.salonConfig ? await window.salonConfig.get() : {};
                 const minAntelacionHoras = configGlobal?.min_antelacion_horas ?? 2;
-                const duracionTurno = Number(configGlobal?.duracion_turnos || 60);
-                const intervaloTurnos = Number(configGlobal?.intervalo_entre_turnos || 0);
                 const requiereAnticipo = configNegocio?.requiere_anticipo === true;
 
                 const [year, month, day] = date.split('-').map(Number);
                 const [hours, minutes] = time.split(':').map(Number);
                 const fechaTurno = new Date(year, month - 1, day, hours, minutes, 0);
                 const minFechaPermitida = new Date(Date.now() + (minAntelacionHoras * 60 * 60 * 1000));
-                const diasSemana = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-                const diaSemana = diasSemana[new Date(year, month - 1, day).getDay()];
 
                 if (fechaTurno < minFechaPermitida) {
                     setError(`Solo se puede reservar con al menos ${minAntelacionHoras} hora(s) de anticipación.`);
@@ -286,28 +219,13 @@ END:VCALENDAR`;
                 let cursor = time;
                 const creadas = [];
 
-                for (let index = 0; index < profesional.asignaciones.length; index++) {
-                    const item = profesional.asignaciones[index];
+                for (const item of profesional.asignaciones) {
                     const servicioItem = item.servicio;
                     const profesionalItem = item.profesional;
                     const bookings = await getBookingsByDateAndProfesional(date, profesionalItem.id);
-                    const horariosPorDia = await window.salonConfig.getHorariosPorDia(profesionalItem.id);
-                    const descansosPorDia = window.salonConfig.getDescansosPorDia
-                        ? await window.salonConfig.getDescansosPorDia(profesionalItem.id)
-                        : {};
-                    const inicioMin = timeToMinutes(cursor);
-                    const finMin = inicioMin + (parseInt(servicioItem.duracion, 10) || 60);
-                    const indicesDelDia = horariosPorDia[diaSemana] || [];
-                    const dentroHorario = estaDentroBloqueTrabajo(inicioMin, finMin, indicesDelDia, duracionTurno, intervaloTurnos);
-                    const tocaDescanso = slotTieneDescanso(inicioMin, finMin, descansosPorDia[diaSemana] || []);
-                    const tieneConflicto = bookings.some(booking => {
-                        const bookingStart = timeToMinutes(booking.hora_inicio);
-                        const bookingEnd = timeToMinutes(booking.hora_fin);
-                        return (inicioMin < bookingEnd) && (finMin > bookingStart);
-                    });
-                    const horarioPermitido = index > 0 || servicioPermiteHorario(servicioItem, cursor);
+                    const available = filterAvailableSlots([cursor], servicioItem.duracion, bookings);
 
-                    if (!dentroHorario || tocaDescanso || tieneConflicto || !horarioPermitido) {
+                    if (available.length === 0) {
                         setError(`El horario de ${servicioItem.nombre} con ${profesionalItem.nombre} ya no está disponible.`);
                         setSubmitting(false);
                         return;
