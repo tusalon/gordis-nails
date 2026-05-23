@@ -19,27 +19,16 @@ function getNegocioId() {
 window.loginProfesional = async function(telefono, password) {
     try {
         const negocioId = getNegocioId();
-        const telefonoLimpio = String(telefono || '').replace(/\D/g, '').replace(/^53(?=\d{8,}$)/, '');
-        const passwordLimpio = String(password || '').trim();
-        if (!negocioId || !telefonoLimpio || !passwordLimpio) {
-            return null;
-        }
         console.log('🔐 Intentando login de profesional:', telefono, 'negocio:', negocioId);
         
         const response = await fetch(
-            `${window.SUPABASE_URL}/rest/v1/rpc/login_profesional`,
+            `${window.SUPABASE_URL}/rest/v1/profesionales?negocio_id=eq.${negocioId}&telefono=eq.${telefono}&password=eq.${password}&activo=eq.true&select=*`,
             {
-                method: 'POST',
                 headers: {
                     'apikey': window.SUPABASE_ANON_KEY,
                     'Authorization': `Bearer ${window.SUPABASE_ANON_KEY}`,
                     'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    p_negocio_id: negocioId,
-                    p_telefono: telefonoLimpio,
-                    p_password: passwordLimpio
-                })
+                }
             }
         );
         
@@ -48,11 +37,12 @@ window.loginProfesional = async function(telefono, password) {
             return null;
         }
         
-        let data = await response.json();
+        const data = await response.json();
         console.log('📋 Resultado login:', data);
         
         if (data && data.length > 0) {
-            return data[0];
+            const profesional = data[0];
+            return profesional;
         }
         return null;
     } catch (error) {
@@ -64,14 +54,10 @@ window.loginProfesional = async function(telefono, password) {
 window.verificarProfesionalPorTelefono = async function(telefono) {
     try {
         const negocioId = getNegocioId();
-        const telefonoLimpio = String(telefono || '').replace(/\D/g, '').replace(/^53(?=\d{8,}$)/, '');
-        if (!negocioId || !telefonoLimpio) {
-            return null;
-        }
         console.log('🔍 Verificando si es profesional (solo teléfono):', telefono, 'negocio:', negocioId);
         
         const response = await fetch(
-            `${window.SUPABASE_URL}/rest/v1/profesionales?negocio_id=eq.${encodeURIComponent(negocioId)}&telefono=eq.${encodeURIComponent(telefonoLimpio)}&activo=eq.true&select=id,nombre,telefono,nivel`,
+            `${window.SUPABASE_URL}/rest/v1/profesionales?negocio_id=eq.${negocioId}&telefono=eq.${telefono}&activo=eq.true&select=id,nombre,telefono,nivel`,
             {
                 headers: {
                     'apikey': window.SUPABASE_ANON_KEY,
@@ -101,13 +87,6 @@ window.verificarProfesionalPorTelefono = async function(telefono) {
 
 window.getProfesionalAutenticado = function() {
     const auth = localStorage.getItem('profesionalAuth');
-    const loginTime = localStorage.getItem('profesionalLoginTime');
-    const sesionVigente = loginTime && (Date.now() - parseInt(loginTime)) < 8 * 60 * 60 * 1000;
-    if (!sesionVigente) {
-        localStorage.removeItem('profesionalAuth');
-        localStorage.removeItem('profesionalLoginTime');
-        return null;
-    }
     if (auth) {
         try {
             return JSON.parse(auth);

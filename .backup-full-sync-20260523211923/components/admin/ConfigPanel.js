@@ -41,8 +41,7 @@ function ConfigPanel({ profesionalId, modoRestringido }) {
         { value: 7, label: '7 días', icon: '📆' },
         { value: 15, label: '15 días', icon: '📅' },
         { value: 30, label: '30 días', icon: '📅' },
-        { value: 60, label: '60 días', icon: '📆' },
-        { value: 0, label: 'Indefinido', icon: '∞' }
+        { value: 60, label: '60 días', icon: '📆' }
     ];
 
     React.useEffect(() => {
@@ -177,7 +176,7 @@ function ConfigPanel({ profesionalId, modoRestringido }) {
                             <label className="block text-sm font-medium text-gray-700 mb-2">
                                 Antelacion maxima para reservar
                             </label>
-                            <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                            <div className="grid grid-cols-4 sm:grid-cols-4 gap-2">
                                 {opcionesAntelacion.map(opcion => (
                                     <button
                                         key={opcion.value}

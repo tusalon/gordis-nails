@@ -24,30 +24,19 @@
 
     <!-- Scripts necesarios -->
     <script src="utils/supabase-config.js"></script>
-    <script src="utils/hero-backgrounds.js?v=20260522-fondos-lashes-peluqueria"></script>
     <script src="utils/storage.js"></script>
     <script src="utils/config-negocio.js"></script>
     
     <!-- Componente de edición -->
-    <script type="text/babel" src="components/admin/EditarNegocio.js?v=20260522-inasistencias"></script>
+    <script type="text/babel" src="components/admin/EditarNegocio.js"></script>
 
     <script>
         // Verificar autenticación
         (function() {
             const negocioId = localStorage.getItem('negocioId');
             const adminAuth = localStorage.getItem('adminAuth') === 'true';
-            const profesionalAuthRaw = localStorage.getItem('profesionalAuth');
-            const profesionalLoginTime = localStorage.getItem('profesionalLoginTime');
-            let profesionalNivel = 0;
-            try {
-                profesionalNivel = profesionalAuthRaw ? (JSON.parse(profesionalAuthRaw).nivel || 1) : 0;
-            } catch (e) {
-                profesionalNivel = 0;
-            }
-            const profesionalAvanzado = profesionalAuthRaw && profesionalNivel >= 3 && profesionalLoginTime &&
-                (Date.now() - parseInt(profesionalLoginTime)) < 8 * 60 * 60 * 1000;
             
-            if (!negocioId || (!adminAuth && !profesionalAvanzado)) {
+            if (!negocioId || !adminAuth) {
                 console.log('🚫 No hay sesión, redirigiendo a login');
                 window.location.href = 'admin-login.html';
             }
