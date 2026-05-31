@@ -1,6 +1,6 @@
 // sw.js - Service Worker para GordisNailsbySandra
 
-const CACHE_NAME = 'gordis-nails-v29';
+const CACHE_NAME = 'gordis-nails-v47';
 const urlsToCache = [
   '/gordis-nails/',
   '/gordis-nails/index.html',
@@ -17,7 +17,14 @@ const urlsToCache = [
   '/gordis-nails/icons/icon-152x152.png',
   '/gordis-nails/icons/icon-192x192.png',
   '/gordis-nails/icons/icon-384x384.png',
-  '/gordis-nails/icons/icon-512x512.png'
+  '/gordis-nails/icons/icon-512x512.png',
+  '/gordis-nails/vendor/react.production.min.js',
+  '/gordis-nails/vendor/react-dom.production.min.js',
+  '/gordis-nails/vendor/babel.min.js',
+  '/gordis-nails/vendor/bcrypt.min.js',
+  '/gordis-nails/vendor/tailwind-browser.js',
+  '/gordis-nails/vendor/lucide/lucide.css',
+  '/gordis-nails/vendor/lucide/lucide.woff2'
 ];
 
 // ============================================
