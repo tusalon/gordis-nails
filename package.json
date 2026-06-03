@@ -1,7 +1,7 @@
 {
-  "name": "gordisnails",
+  "name": "exoticnailsbyyuli",
   "version": "1.0.0",
-  "description": "APK Android para GordisNailsbySandra",
+  "description": "APK Android para Exotic Nails by Yuly",
   "main": "admin-app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -15,16 +15,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/tusalon/gordis-nails.git"
+    "url": "git+https://github.com/tusalon/exoticnailsbyyuly.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/tusalon/gordis-nails/issues"
+    "url": "https://github.com/tusalon/exoticnailsbyyuly/issues"
   },
-  "homepage": "https://github.com/tusalon/gordis-nails#readme",
+  "homepage": "https://github.com/tusalon/exoticnailsbyyuly#readme",
   "devDependencies": {
     "@babel/standalone": "^7.29.7",
     "@capacitor/android": "^8.3.4",
@@ -38,5 +38,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "supabase": "^2.76.15"
+  },
+  "dependencies": {
+    "@capacitor/push-notifications": "^8.1.1"
   }
 }
