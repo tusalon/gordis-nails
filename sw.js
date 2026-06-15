@@ -1,6 +1,6 @@
 // sw.js - Service Worker para GordisNailsbySandra
 
-const CACHE_NAME = 'gordis-nails-v49';
+const CACHE_NAME = 'gordis-nails-v56';
 const urlsToCache = [
   '/gordis-nails/',
   '/gordis-nails/index.html',
