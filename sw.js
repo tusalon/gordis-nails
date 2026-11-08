@@ -1,198 +1,77 @@
-// sw.js - Service Worker para GordisNailsbySandra
+// Puente: este salón ya vive en la app nueva (https://tusalon.github.io/rservasroma/).
+// Este service worker solo hace tres cosas: borra la caché vieja, deja de interceptar peticiones (todo va directo
+// a la red) y mantiene las notificaciones push que ya estaban suscritas. Generado por migracion-repos/puente.js.
+const DESTINO = "https://tusalon.github.io/rservasroma/";
+const SLUG = "gordis-nails";
+const REPO = "gordis-nails";
+const QS = new URLSearchParams({ s: SLUG }).toString(); // la misma codificación que usa mapearUrl
+const CLIENTA = DESTINO + '?' + QS;
+const ADMIN = DESTINO + 'admin.html?' + QS;
 
-const CACHE_NAME = 'gordis-nails-v56';
-const urlsToCache = [
-  '/gordis-nails/',
-  '/gordis-nails/index.html',
-  '/gordis-nails/admin.html',
-  '/gordis-nails/admin-login.html',
-  '/gordis-nails/calendar.html',
-  '/gordis-nails/setup-wizard.html',
-  '/gordis-nails/editar-negocio.html',
-  '/gordis-nails/manifest.json',
-  '/gordis-nails/icons/icon-72x72.png',
-  '/gordis-nails/icons/icon-96x96.png',
-  '/gordis-nails/icons/icon-128x128.png',
-  '/gordis-nails/icons/icon-144x144.png',
-  '/gordis-nails/icons/icon-152x152.png',
-  '/gordis-nails/icons/icon-192x192.png',
-  '/gordis-nails/icons/icon-384x384.png',
-  '/gordis-nails/icons/icon-512x512.png',
-  '/gordis-nails/vendor/react.production.min.js',
-  '/gordis-nails/vendor/react-dom.production.min.js',
-  '/gordis-nails/vendor/babel.min.js',
-  '/gordis-nails/vendor/bcrypt.min.js',
-  '/gordis-nails/vendor/tailwind-browser.js',
-  '/gordis-nails/vendor/lucide/lucide.css',
-  '/gordis-nails/vendor/lucide/lucide.woff2',
-  '/gordis-nails/utils/push-config.js',
-  '/gordis-nails/utils/push-notifications.js'
-];
+// Una dirección de la app vieja ("/repo/admin.html", "https://tusalon.github.io/repo/?x=1") -> la de la app nueva.
+function mapearUrl(url) {
+    if (!url) return ADMIN;
+    var u = String(url);
+    if (u.indexOf(DESTINO) === 0) return u;
+    var rel = null;
+    var marca = '/' + REPO + '/';
+    var i = u.indexOf(marca);
+    if (i === 0 || (i > 0 && /^https?:\/\/tusalon\.github\.io/.test(u))) rel = u.slice(i + marca.length);
+    else if (u === '/' + REPO) rel = '';
+    if (rel === null) return u;
+    var partes = rel.split('#');
+    var hash = partes[1] ? '#' + partes[1] : '';
+    var cb = partes[0].split('?');
+    var pagina = cb[0];
+    var params = new URLSearchParams(cb[1] || '');
+    params.set('s', SLUG);
+    return DESTINO + pagina + '?' + params.toString() + hash;
+}
 
-// ============================================
-// INSTALACIÓN
-// ============================================
-self.addEventListener('install', event => {
-  console.log('📦 📦 Service Worker instalando...');
-  self.skipWaiting();
-  
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('✅ Cache creado, guardando archivos...');
-        return cache.addAll(urlsToCache);
-      })
-      .catch(error => {
-        console.error('❌ Error al cachear archivos:', error);
-      })
-  );
+self.addEventListener('install', function () { self.skipWaiting(); });
+
+self.addEventListener('activate', function (event) {
+    event.waitUntil(
+        caches.keys()
+            .then(function (claves) { return Promise.all(claves.map(function (c) { return caches.delete(c); })); })
+            .then(function () { return self.clients.claim(); })
+            .then(function () { return self.clients.matchAll({ type: 'window' }); })
+            .then(function (ventanas) {
+                // Las ventanas que ya estaban abiertas con la app vieja pasan a la nueva.
+                ventanas.forEach(function (v) {
+                    try { v.navigate(/admin/i.test(v.url) ? ADMIN : CLIENTA); } catch (e) { /* ventana cerrada */ }
+                });
+            })
+    );
 });
 
-// ============================================
-// ACTIVACIÓN
-// ============================================
-self.addEventListener('activate', event => {
-  console.log('🔄 🔄 Service Worker activado, limpiando caches antiguos...');
-  
-  event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('🗑️ 🗑️ Eliminando cache antiguo:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => {
-      console.log('✅ Service Worker activado y listo');
-      return self.clients.claim();
-    })
-  );
-});
+// Sin 'fetch' a proposito: no se intercepta nada.
 
-// ============================================
-// ESTRATEGIA DE CACHÉ
-// ============================================
-self.addEventListener('fetch', event => {
-  // Ignorar peticiones que no sean HTTP
-  if (!event.request.url.startsWith('http')) return;
-  
-  // ⚡ ⚠️ NO INTERCEPTAR WHATSAPP (ESENCIAL PARA iOS)
-  if (event.request.url.includes('wa.me') || 
-      event.request.url.includes('api.whatsapp.com') ||
-      event.request.url.includes('whatsapp.com')) {
-    console.log('📱 📱 Dejando pasar WhatsApp sin cache');
-    return;
-  }
-  
-  // Ignorar otras APIs externas
-  if (event.request.url.includes('supabase.co')) return;
-  if (event.request.url.includes('ntfy.sh')) return;
-  if (event.request.url.includes('unsplash.com')) return;
-  if (event.request.url.includes('cdn.') || 
-      event.request.url.includes('unpkg.com') || 
-      event.request.url.includes('trickle.so')) {
-    return;
-  }
-
-  // Estrategia: Network First, fallback a cache
-  event.respondWith(
-    fetch(event.request)
-      .then(networkResponse => {
-        // Si la respuesta es válida, guardar en cache
-        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return networkResponse;
-      })
-      .catch(() => {
-        // Si falla la red, buscar en cache
-        return caches.match(event.request).then(cachedResponse => {
-          if (cachedResponse) {
-            console.log('📦 📦 Sirviendo desde cache:', event.request.url);
-            return cachedResponse;
-          }
-          // Si no hay cache y es imagen, devolver icon por defecto
-          if (event.request.url.match(/\.(jpg|jpeg|png|gif|svg|webp)$/)) {
-            return caches.match('/gordis-nails/icons/icon-192x192.png');
-          }
-          return new Response('Error de red', { status: 408 });
-        });
-      })
-  );
-});
-
-// ============================================
-// MANEJO DE MENSAJES
-// ============================================
-self.addEventListener('message', event => {
-  console.log('📨 📄 Mensaje recibido:', event.data);
-  
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    console.log('⏩ ⏩ Saltando waiting...');
-    self.skipWaiting();
-  }
-  
-  if (event.data && event.data.type === 'CLEAR_CACHE') {
-    console.log('🧹 🧹 Limpiando todo el cache...');
-    caches.keys().then(cacheNames => {
-      cacheNames.forEach(cacheName => {
-        caches.delete(cacheName);
-        console.log('🗑️ 🗑️ Cache eliminado:', cacheName);
-      });
-    });
-  }
-});
-
-// ============================================
-// WEB PUSH OPCIONAL
-// ============================================
-self.addEventListener('push', event => {
-  let payload = {};
-
-  try {
-    payload = event.data ? event.data.json() : {};
-  } catch (error) {
-    payload = {
-      title: 'RservasRoma',
-      body: event.data ? event.data.text() : 'Tienes una nueva notificación'
-    };
-  }
-
-  const title = payload.title || 'RservasRoma';
-  const options = {
-    body: payload.body || 'Tienes una nueva notificación',
-    icon: '/gordis-nails/icons/icon-192x192.png',
-    badge: '/gordis-nails/icons/icon-96x96.png',
-    tag: payload.tag || 'rservasroma',
-    data: {
-      url: payload.url || '/gordis-nails/admin.html',
-      ...(payload.data || {})
+self.addEventListener('push', function (event) {
+    var carga = {};
+    try {
+        carga = event.data ? event.data.json() : {};
+    } catch (e) {
+        carga = { title: 'RservasRoma', body: event.data ? event.data.text() : 'Tienes una nueva notificación' };
     }
-  };
-
-  event.waitUntil(self.registration.showNotification(title, options));
+    event.waitUntil(self.registration.showNotification(carga.title || 'RservasRoma', {
+        body: carga.body || 'Tienes una nueva notificación',
+        icon: DESTINO + 'icons/icon-192x192.png',
+        badge: DESTINO + 'icons/badge-96.png',
+        tag: carga.tag || 'rservasroma',
+        data: Object.assign({ url: mapearUrl(carga.url) }, carga.data || {})
+    }));
 });
 
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-
-  const targetUrl = event.notification?.data?.url || '/gordis-nails/admin.html';
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      for (const client of clientList) {
-        if (client.url.includes(targetUrl) && 'focus' in client) return client.focus();
-      }
-      if (clients.openWindow) return clients.openWindow(targetUrl);
-      return null;
-    })
-  );
+self.addEventListener('notificationclick', function (event) {
+    event.notification.close();
+    var destino = mapearUrl(event.notification && event.notification.data && event.notification.data.url);
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (ventanas) {
+            for (var i = 0; i < ventanas.length; i++) {
+                if (ventanas[i].url === destino && 'focus' in ventanas[i]) return ventanas[i].focus();
+            }
+            return clients.openWindow ? clients.openWindow(destino) : null;
+        })
+    );
 });
-
-console.log('✅ Service Worker configurado para GordisNailsbySandra');
-console.log('📦 Cache:', CACHE_NAME);
-console.log('📄 Archivos a cachear:', urlsToCache.length);
